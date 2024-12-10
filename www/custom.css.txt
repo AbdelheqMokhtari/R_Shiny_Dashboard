@@ -1,0 +1,6 @@
+.equal-height-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: stretch;
+  height: 100%;
+}
