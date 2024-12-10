@@ -102,9 +102,46 @@ ui <- dashboardPage(
               selected = "Remove Outliers"
             ),
             actionButton("apply_outliers", "Apply")
-          ),
+          )
         ),
+        fluidRow(
+          # Data Transformation Box
+          box(
+            title = "Data Transformation",
+            status = "success",
+            solidHeader = TRUE,
+            width = 6,
+            # Select numerical variables for transformation (no default selection)
+            uiOutput("transform_var_ui"),
+            # Transformation method selection
+            selectInput(
+              inputId = "transformation_method",
+              label = "Select Transformation Method:",
+              choices = c("Min-Max Scaling", "Z-Score Normalization", "Log Transformation"),
+              selected = "Min-Max Scaling"
+            ),
+            actionButton("apply_transformation", "Apply")
+          ),
+          # Encoding Data Box
+          box(
+            title = "Encoding Data",
+            status = "info",
+            solidHeader = TRUE,
+            width = 6,
+            # Select categorical variables for encoding (no default selection)
+            uiOutput("encoding_var_ui"),
+            # Encoding method selection
+            selectInput(
+              inputId = "encoding_method",
+              label = "Select Encoding Method:",
+              choices = c("Label Encoding", "One-Hot Encoding"),
+              selected = "Label Encoding"
+            ),
+            actionButton("apply_encoding", "Apply")
+          )
+        )
       ),
+      
       
       tabItem(
         tabName = "analyse_data",

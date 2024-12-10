@@ -5,8 +5,12 @@ library(readxl)
 library(DT)
 library(plotly)
 server <- function(input, output, session) {
+  
   # Reactive data storage
   uploaded_data <- reactiveVal(NULL)
+  
+  # Saving Column_types when we load the data first time 
+  column_types <- reactiveVal(NULL)
   
   observeEvent(input$file, {
     req(input$file)
@@ -29,6 +33,11 @@ server <- function(input, output, session) {
     }
     
     uploaded_data(data)
+    
+    
+    # Initialize column types
+    column_types(sapply(data, class))
+    
   })
   
   # Aperçu des données
@@ -90,6 +99,45 @@ server <- function(input, output, session) {
     }
   })
   
+  # Data Transformation Variable Selection
+  output$transform_var_ui <- renderUI({
+    req(uploaded_data())
+    req(column_types())
+    
+    col_types <- column_types()
+    numeric_vars <- names(col_types[col_types %in% c("numeric", "integer")])
+    
+    selectizeInput(
+      inputId = "transform_var",
+      label = "Select Numerical Variables for Transformation:",
+      choices = numeric_vars,
+      selected = NULL, # No variable selected by default
+      multiple = TRUE
+    )
+  })
+  
+  
+  
+  # Data Encoding Variable Selection
+  
+  output$encoding_var_ui <- renderUI({
+    req(uploaded_data())
+    
+    # Identify categorical variables (character or factor types)
+    data <- uploaded_data()
+    categorical_vars <- names(data)[sapply(data, function(col) is.factor(col) || is.character(col))]
+    
+    selectizeInput(
+      inputId = "encoding_var",
+      label = "Select Categorical Variables for Encoding:",
+      choices = categorical_vars,
+      selected = NULL, # No variable selected by default
+      multiple = TRUE
+    )
+  })
+  
+  
+  
   # Apply Logic of Preprocessing 
   
   # Observe the selected variable and update the reactive value
@@ -141,6 +189,8 @@ server <- function(input, output, session) {
       showNotification("No missing values in the selected variable.", type = "warning")
     }
   })
+  
+  # handling outliers logic 
   
   observeEvent(input$apply_outliers, {
     req(input$outlier_var, input$outlier_method, uploaded_data())
@@ -196,6 +246,57 @@ server <- function(input, output, session) {
     } else {
       showNotification("Selected variable is not numeric.", type = "error")
     }
+  })
+  
+  # Handling Data Transformation Logic 
+  
+  observeEvent(input$apply_transformation, {
+    req(uploaded_data())
+    req(input$transform_var)
+    req(input$transformation_method)
+    
+    data <- uploaded_data()
+    selected_vars <- input$transform_var
+    
+    for (var in selected_vars) {
+      if (input$transformation_method == "Min-Max Scaling") {
+        data[[var]] <- (data[[var]] - min(data[[var]], na.rm = TRUE)) / 
+          (max(data[[var]], na.rm = TRUE) - min(data[[var]], na.rm = TRUE))
+      } else if (input$transformation_method == "Z-Score Normalization") {
+        data[[var]] <- scale(data[[var]], center = TRUE, scale = TRUE)
+      } else if (input$transformation_method == "Log Transformation") {
+        data[[var]] <- log(data[[var]] + 1) # Adding 1 to handle zero values
+      }
+    }
+    
+    uploaded_data(data)
+    showNotification("Transformation applied successfully!", type = "message")
+  })
+  
+  
+  # Handling Data Encoding Logic
+  
+  observeEvent(input$apply_encoding, {
+    req(uploaded_data())
+    req(input$encoding_var)
+    
+    data <- uploaded_data()
+    selected_vars <- input$encoding_var
+    col_types <- column_types()
+    
+    if (input$encoding_method == "Label Encoding") {
+      for (var in selected_vars) {
+        data[[var]] <- as.numeric(as.factor(data[[var]]))
+      }
+    } else if (input$encoding_method == "One-Hot Encoding") {
+      one_hot <- model.matrix(~ . - 1, data[selected_vars, drop = FALSE])
+      data <- cbind(data[, !(names(data) %in% selected_vars)], one_hot)
+    }
+    
+    # Update dataset and preserve original column types
+    uploaded_data(data)
+    column_types(col_types) # Keep column types unchanged
+    showNotification("Encoding applied successfully!", type = "message")
   })
   
   
