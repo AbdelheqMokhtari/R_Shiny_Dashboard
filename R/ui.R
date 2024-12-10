@@ -102,7 +102,6 @@ ui <- dashboardPage(
       tabItem(
         tabName = "ml_models",
         fluidRow(
-          # Box pour Split Data
           box(
             title = "Split Data", status = "primary", solidHeader = TRUE, width = 12,
             selectInput(
@@ -140,7 +139,6 @@ ui <- dashboardPage(
                 step = 1
               )
             )
-            
           ),
           box(
             title = "Model Selection", status = "primary", solidHeader = TRUE, width = 12,
@@ -155,6 +153,46 @@ ui <- dashboardPage(
               "Select Model:",
               choices = NULL,
               selected = NULL
+            )
+          ),
+          box(
+            title = "Model Parameters", status = "primary", solidHeader = TRUE, width = 12,
+            conditionalPanel(
+              condition = "input.model_choice == 'SVM'",
+              numericInput("svm_C", "Parameter C:", value = 0.01, min = 0.001, step = 0.001),
+              selectInput("svm_kernel", "Kernel Type:", choices = c("linear", "polynomial", "rbf"), selected = "linear")
+            ),
+            conditionalPanel(
+              condition = "input.model_choice == 'Random Forest'",
+              numericInput("rf_trees", "Number of Trees:", value = 100, min = 1, step = 1)
+            ),
+            conditionalPanel(
+              condition = "input.model_choice == 'Logistic Regression'",
+              checkboxInput("log_reg_penalty", "Include Penalty (Regularization)?", value = TRUE),
+              selectInput(
+                "log_reg_penalty_type",
+                "Penalty Type:",
+                choices = c("L1 (Lasso)", "L2 (Ridge)"),
+                selected = "L2 (Ridge)"
+              ),
+              conditionalPanel(
+                condition = "input.log_reg_penalty == true",
+                numericInput("log_reg_penalty_value", "Penalty Strength (λ):", value = 0.01, min = 0.001, step = 0.001)
+              )
+            ),
+            conditionalPanel(
+              condition = "input.model_choice == 'Linear Regression'",
+              checkboxInput("lin_reg_include_intercept", "Include Intercept?", value = TRUE)
+            ),
+            conditionalPanel(
+              condition = "input.model_choice == 'Decision Tree'",
+              numericInput("dt_max_depth", "Maximum Depth:", value = 5, min = 1, step = 1),
+              selectInput(
+                "dt_criterion",
+                "Split Criterion:",
+                choices = c("gini", "entropy"),
+                selected = "gini"
+              )
             )
           )
         )

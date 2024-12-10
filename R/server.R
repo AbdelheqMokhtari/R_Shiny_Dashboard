@@ -4,7 +4,6 @@ library(bslib)
 library(readxl)  
 library(DT)
 library(plotly)
-# Code côté serveur
 server <- function(input, output, session) {
   # Reactive data storage
   uploaded_data <- reactiveVal(NULL)
@@ -190,6 +189,36 @@ server <- function(input, output, session) {
   })
   
   # Observer pour définir les modèles disponibles en fonction de la variable cible
+  observeEvent(input$target_variable, {
+    req(uploaded_data(), input$target_variable)
+    data <- uploaded_data()
+    target_var <- data[[input$target_variable]]
+    
+    if (is.numeric(target_var)) {
+      updateSelectInput(
+        session,
+        "model_choice",
+        choices = c("Linear Regression", "Decision Tree"),
+        selected = "Linear Regression"
+      )
+    } else if (is.factor(target_var) || is.character(target_var)) {
+      updateSelectInput(
+        session,
+        "model_choice",
+        choices = c("SVM", "Random Forest", "Logistic Regression"),
+        selected = "Logistic Regression"
+      )
+    } else {
+      showNotification("Unsupported data type for Target Variable.", type = "error")
+    }
+  })
+  observe({
+    req(uploaded_data())
+    data <- uploaded_data()
+    updateSelectInput(session, "target_variable", choices = names(data))
+  })
+  
+  # Mise à jour des modèles en fonction de la variable cible
   observeEvent(input$target_variable, {
     req(uploaded_data(), input$target_variable)
     data <- uploaded_data()
