@@ -23,47 +23,26 @@ ui <- dashboardPage(
   dashboardBody(
     tags$head(
       tags$style(HTML("
-    /* Customizing the Dashboard */
-    .skin-blue .main-header .logo {
-      background-color: #1f77b4; /* Header background */
-      color: white; /* Header text color */
-      font-size: 20px; /* Header font size */
-    }
-    .skin-blue .main-sidebar {
-      background-color: #343a40; /* Sidebar background */
-      color: #f8f9fa; /* Sidebar text color */
-    }
-    .skin-blue .sidebar-menu>li.active>a {
-      background-color: #17a2b8; /* Active menu item background */
-      color: white;
-    }
-    .skin-blue .sidebar-menu>li>a:hover {
-      background-color: #007bff; /* Hovered menu item background */
-      color: white;
-    }
-
-    /* Ensuring equal height for Missing Values and Outliers boxes */
-    .equal-height-container {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;  /* Optional: adds space between columns */
-    }
-
-    .equal-height-box {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      height: 100%;   /* Ensures both boxes fill the available space equally */
-    }
-
-    /* Optional: You can set a minimum height if desired */
-    .box {
-      min-height: 300px;  /* Optional: Ensures boxes are large enough */
-    }
-  "))
+        /* Customizing the Dashboard */
+        .skin-blue .main-header .logo {
+          background-color: #1f77b4; /* Header background */
+          color: white; /* Header text color */
+          font-size: 20px; /* Header font size */
+        }
+        .skin-blue .main-sidebar {
+          background-color: #343a40; /* Sidebar background */
+          color: #f8f9fa; /* Sidebar text color */
+        }
+        .skin-blue .sidebar-menu>li.active>a {
+          background-color: #17a2b8; /* Active menu item background */
+          color: white;
+        }
+        .skin-blue .sidebar-menu>li>a:hover {
+          background-color: #007bff; /* Hovered menu item background */
+          color: white;
+        }
+      "))
     ),
-    
-    
     
     tabItems(
       tabItem(
@@ -90,73 +69,42 @@ ui <- dashboardPage(
         )
       ),
       
-    tabItem(
-      tabName = "Preprocessing",
-      fluidRow(
-        # Box for Handling Missing Values
-        column(
-          width = 6,
-          div(class = "equal-height-box box",  # Apply equal height box styling
-              box(
-                title = "Handle Missing Values",
-                width = 12, 
-                solidHeader = TRUE, 
-                status = "primary",
-                selectInput(
-                  inputId = "missing_feature",
-                  label = "Select Feature:",
-                  choices = names(uploaded_data()),
-                  selected = names(uploaded_data())[1]
-                ),
-                textOutput("missing_percentage"),
-                conditionalPanel(
-                  condition = "output.missingPercentage !== '0%'",
-                  selectInput(
-                    inputId = "missing_action",
-                    label = "Choose Action:",
-                    choices = c(
-                      "Remove Rows" = "remove",
-                      "Replace with Mean" = "mean",
-                      "Replace with Median" = "median",
-                      "Replace with Mode" = "mode"
-                    )
-                  ),
-                  actionButton(inputId = "apply_missing", label = "Apply")
-                )
-              )
-          )
+      tabItem(
+        tabName = "preprocessing",
+        fluidRow(
+          # Handling Missing Values Box
+          box(
+            title = "Handle Missing Values", 
+            status = "primary", 
+            solidHeader = TRUE, 
+            width = 6,
+            # Select variable from dataset
+            uiOutput("missing_var_ui"),
+            # Display missing percentage
+            textOutput("missing_percent"),
+            # Select method to handle missing values
+            uiOutput("missing_method_ui"),
+            actionButton("apply_missing", "Apply")
+          ),
+          # Handling Outliers Box
+          box(
+            title = "Handle Outliers", 
+            status = "warning", 
+            solidHeader = TRUE, 
+            width = 6,
+            # Select variable for outlier handling
+            uiOutput("outlier_var_ui"),
+            # Select method to handle outliers
+            selectInput(
+              inputId = "outlier_method", 
+              label = "Select Outlier Handling Method:", 
+              choices = c("Remove Outliers", "Replace with Median", "Replace with Mean"), 
+              selected = "Remove Outliers"
+            ),
+            actionButton("apply_outliers", "Apply")
+          ),
         ),
-        
-        # Box for Handling Outliers
-        column(
-          width = 6,
-          div(class = "equal-height-box box",  # Apply equal height box styling
-              box(
-                title = "Handle Outliers",
-                width = 12, 
-                solidHeader = TRUE, 
-                status = "warning",
-                selectInput(
-                  inputId = "outlier_feature",
-                  label = "Select Feature (Numerical Only):",
-                  choices = names(uploaded_data())[sapply(uploaded_data(), is.numeric)],
-                  selected = names(uploaded_data())[sapply(uploaded_data(), is.numeric)][1]
-                ),
-                selectInput(
-                  inputId = "outlier_method",
-                  label = "Select Method:",
-                  choices = c(
-                    "Remove Outliers" = "remove",
-                    "Replace with Mean" = "mean",
-                    "Replace with Median" = "median"
-                  )
-                ),
-                actionButton(inputId = "apply_outliers", label = "Apply")
-              )
-          )
-        )
       ),
-    ),
       
       tabItem(
         tabName = "analyse_data",
