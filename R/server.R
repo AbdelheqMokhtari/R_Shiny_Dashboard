@@ -5,12 +5,24 @@ library(readxl)
 library(DT)
 library(plotly)
 server <- function(input, output, session) {
+<<<<<<< HEAD
   # Reactive to store dataset
   dataset <- reactiveVal(NULL)
   
   # Observer to load the dataset
   observeEvent(input$load_data, {
     req(input$file_input)  # Vérifie que l'utilisateur a choisi un fichier
+=======
+  
+  # Reactive data storage
+  uploaded_data <- reactiveVal(NULL)
+  
+  # Saving Column_types when we load the data first time 
+  column_types <- reactiveVal(NULL)
+  
+  observeEvent(input$file, {
+    req(input$file)
+>>>>>>> 0380dd0f30b78b7df3c8fa80043c8242f3e5a27f
     
     file_path <- input$file_input$datapath
     file_name <- input$file_input$name
@@ -28,6 +40,7 @@ server <- function(input, output, session) {
       return(NULL)
     }
     
+<<<<<<< HEAD
     dataset(data)  # Sauvegarde les données chargées
     
     # Met à jour les choix pour le selectInput
@@ -54,6 +67,14 @@ server <- function(input, output, session) {
       "Number of instances" = num_instances,
       "Number of categories" = num_categories
     )
+=======
+    uploaded_data(data)
+    
+    
+    # Initialize column types
+    column_types(sapply(data, class))
+    
+>>>>>>> 0380dd0f30b78b7df3c8fa80043c8242f3e5a27f
   })
   
   # Aperçu des données
@@ -61,6 +82,262 @@ server <- function(input, output, session) {
     req(uploaded_data())
     datatable(uploaded_data(), options = list(pageLength = 5))
   })
+  
+  output$missing_var_ui <- renderUI({
+    req(uploaded_data()) # Ensure data is loaded
+    selectInput(
+      inputId = "missing_var", 
+      label = "Select Variable:", 
+      choices = names(uploaded_data()), # Dynamically get column names
+      selected = NULL
+    )
+  })
+  
+  # Dynamic Selection of missing values
+  output$missing_percent <- renderText({
+    req(input$missing_var, uploaded_data())
+    var <- uploaded_data()[[input$missing_var]]
+    percent <- sum(is.na(var)) / length(var) * 100
+    paste("Missing Percent:", round(percent, 2), "%")
+  })
+  
+  current_missing_var <- reactiveVal(NULL)
+  
+  output$missing_method_ui <- renderUI({
+    req(input$missing_var, uploaded_data())
+    var <- uploaded_data()[[input$missing_var]]
+    if (sum(is.na(var)) > 0) {
+      selectInput(
+        inputId = "missing_method", 
+        label = "Select Method to Handle Missing Values:", 
+        choices = c("Suppression", "Replace with Mode", "Replace with Median", "Replace with Mean"), 
+        selected = current_missing_var() # Preserve the current selection
+      )
+    } else {
+      tags$p("No missing values in the selected variable.", style = "color: green;")
+    }
+  })
+  
+  # Dynamic selection for outliers 
+  
+  output$outlier_var_ui <- renderUI({
+    req(uploaded_data()) # Ensure data is loaded
+    numeric_vars <- names(uploaded_data())[sapply(uploaded_data(), is.numeric)]
+    
+    if (length(numeric_vars) > 0) {
+      selectInput(
+        inputId = "outlier_var", 
+        label = "Select Numerical Variable:", 
+        choices = numeric_vars, 
+        selected = NULL
+      )
+    } else {
+      tags$p("No numerical variables available for outlier handling.", style = "color: red;")
+    }
+  })
+  
+  # Data Transformation Variable Selection
+  output$transform_var_ui <- renderUI({
+    req(uploaded_data())
+    req(column_types())
+    
+    col_types <- column_types()
+    numeric_vars <- names(col_types[col_types %in% c("numeric", "integer")])
+    
+    selectizeInput(
+      inputId = "transform_var",
+      label = "Select Numerical Variables for Transformation:",
+      choices = numeric_vars,
+      selected = NULL, # No variable selected by default
+      multiple = TRUE
+    )
+  })
+  
+  
+  
+  # Data Encoding Variable Selection
+  
+  output$encoding_var_ui <- renderUI({
+    req(uploaded_data())
+    
+    # Identify categorical variables (character or factor types)
+    data <- uploaded_data()
+    categorical_vars <- names(data)[sapply(data, function(col) is.factor(col) || is.character(col))]
+    
+    selectizeInput(
+      inputId = "encoding_var",
+      label = "Select Categorical Variables for Encoding:",
+      choices = categorical_vars,
+      selected = NULL, # No variable selected by default
+      multiple = TRUE
+    )
+  })
+  
+  
+  
+  # Apply Logic of Preprocessing 
+  
+  # Observe the selected variable and update the reactive value
+  observeEvent(input$missing_var, {
+    current_missing_var(input$missing_var)
+  })
+  
+  # Missing value handling logic
+  observeEvent(input$apply_missing, {
+    req(input$missing_var, input$missing_method, uploaded_data())
+    
+    data <- uploaded_data()
+    var <- input$missing_var
+    missing_count <- sum(is.na(data[[var]])) # Count missing values
+    
+    if (missing_count > 0) {
+      if (input$missing_method == "Suppression") {
+        # Remove rows with missing values
+        data <- data[!is.na(data[[var]]), ]
+      } else if (input$missing_method == "Replace with Mode") {
+        mode_val <- as.numeric(names(sort(table(data[[var]]), decreasing = TRUE)[1]))
+        data[[var]][is.na(data[[var]])] <- mode_val
+      } else if (input$missing_method == "Replace with Median") {
+        median_val <- median(data[[var]], na.rm = TRUE)
+        data[[var]][is.na(data[[var]])] <- median_val
+      } else if (input$missing_method == "Replace with Mean") {
+        mean_val <- mean(data[[var]], na.rm = TRUE)
+        data[[var]][is.na(data[[var]])] <- mean_val
+      }
+      
+      # Update the reactive storage
+      uploaded_data(data)
+      
+      # Show popup message with rows affected
+      showModal(
+        modalDialog(
+          title = "Missing Values Handled",
+          paste("The variable", var, "had", missing_count, "missing values."),
+          if (input$missing_method == "Suppression") {
+            paste(missing_count, "rows were removed.")
+          } else {
+            "The missing values have been replaced."
+          },
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        )
+      )
+    } else {
+      showNotification("No missing values in the selected variable.", type = "warning")
+    }
+  })
+  
+  # handling outliers logic 
+  
+  observeEvent(input$apply_outliers, {
+    req(input$outlier_var, input$outlier_method, uploaded_data())
+    
+    data <- uploaded_data()
+    var <- input$outlier_var
+    
+    if (is.numeric(data[[var]])) {
+      # Detect outliers using the IQR method
+      iqr <- IQR(data[[var]], na.rm = TRUE)
+      q1 <- quantile(data[[var]], 0.25, na.rm = TRUE)
+      q3 <- quantile(data[[var]], 0.75, na.rm = TRUE)
+      lower_bound <- q1 - 1.5 * iqr
+      upper_bound <- q3 + 1.5 * iqr
+      
+      outliers <- which(data[[var]] < lower_bound | data[[var]] > upper_bound)
+      outlier_count <- length(outliers)
+      
+      if (outlier_count > 0) {
+        if (input$outlier_method == "Remove Outliers") {
+          # Remove outliers
+          data <- data[-outliers, ]
+        } else if (input$outlier_method == "Replace with Median") {
+          # Replace outliers with median
+          median_val <- median(data[[var]], na.rm = TRUE)
+          data[[var]][outliers] <- median_val
+        } else if (input$outlier_method == "Replace with Mean") {
+          # Replace outliers with mean
+          mean_val <- mean(data[[var]], na.rm = TRUE)
+          data[[var]][outliers] <- mean_val
+        }
+        
+        # Update the reactive storage
+        uploaded_data(data)
+        
+        # Show popup message with the number of outliers detected
+        showModal(
+          modalDialog(
+            title = "Outliers Handled",
+            paste("The variable", var, "had", outlier_count, "outliers detected."),
+            if (input$outlier_method == "Remove Outliers") {
+              paste(outlier_count, "rows were removed.")
+            } else {
+              "The outliers have been replaced."
+            },
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          )
+        )
+      } else {
+        showNotification("No outliers detected in the selected variable.", type = "warning")
+      }
+    } else {
+      showNotification("Selected variable is not numeric.", type = "error")
+    }
+  })
+  
+  # Handling Data Transformation Logic 
+  
+  observeEvent(input$apply_transformation, {
+    req(uploaded_data())
+    req(input$transform_var)
+    req(input$transformation_method)
+    
+    data <- uploaded_data()
+    selected_vars <- input$transform_var
+    
+    for (var in selected_vars) {
+      if (input$transformation_method == "Min-Max Scaling") {
+        data[[var]] <- (data[[var]] - min(data[[var]], na.rm = TRUE)) / 
+          (max(data[[var]], na.rm = TRUE) - min(data[[var]], na.rm = TRUE))
+      } else if (input$transformation_method == "Z-Score Normalization") {
+        data[[var]] <- scale(data[[var]], center = TRUE, scale = TRUE)
+      } else if (input$transformation_method == "Log Transformation") {
+        data[[var]] <- log(data[[var]] + 1) # Adding 1 to handle zero values
+      }
+    }
+    
+    uploaded_data(data)
+    showNotification("Transformation applied successfully!", type = "message")
+  })
+  
+  
+  # Handling Data Encoding Logic
+  
+  observeEvent(input$apply_encoding, {
+    req(uploaded_data())
+    req(input$encoding_var)
+    
+    data <- uploaded_data()
+    selected_vars <- input$encoding_var
+    col_types <- column_types()
+    
+    if (input$encoding_method == "Label Encoding") {
+      for (var in selected_vars) {
+        data[[var]] <- as.numeric(as.factor(data[[var]]))
+      }
+    } else if (input$encoding_method == "One-Hot Encoding") {
+      one_hot <- model.matrix(~ . - 1, data[selected_vars, drop = FALSE])
+      data <- cbind(data[, !(names(data) %in% selected_vars)], one_hot)
+    }
+    
+    # Update dataset and preserve original column types
+    uploaded_data(data)
+    column_types(col_types) # Keep column types unchanged
+    showNotification("Encoding applied successfully!", type = "message")
+  })
+  
+  
+  
   
   # Mise à jour des choix pour les variables
   observe({
@@ -475,4 +752,3 @@ server <- function(input, output, session) {
   })
   
   
-}
