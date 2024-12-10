@@ -37,6 +37,170 @@ server <- function(input, output, session) {
     datatable(uploaded_data(), options = list(pageLength = 5))
   })
   
+  output$missing_var_ui <- renderUI({
+    req(uploaded_data()) # Ensure data is loaded
+    selectInput(
+      inputId = "missing_var", 
+      label = "Select Variable:", 
+      choices = names(uploaded_data()), # Dynamically get column names
+      selected = NULL
+    )
+  })
+  
+  # Dynamic Selection of missing values
+  output$missing_percent <- renderText({
+    req(input$missing_var, uploaded_data())
+    var <- uploaded_data()[[input$missing_var]]
+    percent <- sum(is.na(var)) / length(var) * 100
+    paste("Missing Percent:", round(percent, 2), "%")
+  })
+  
+  current_missing_var <- reactiveVal(NULL)
+  
+  output$missing_method_ui <- renderUI({
+    req(input$missing_var, uploaded_data())
+    var <- uploaded_data()[[input$missing_var]]
+    if (sum(is.na(var)) > 0) {
+      selectInput(
+        inputId = "missing_method", 
+        label = "Select Method to Handle Missing Values:", 
+        choices = c("Suppression", "Replace with Mode", "Replace with Median", "Replace with Mean"), 
+        selected = current_missing_var() # Preserve the current selection
+      )
+    } else {
+      tags$p("No missing values in the selected variable.", style = "color: green;")
+    }
+  })
+  
+  # Dynamic selection for outliers 
+  
+  output$outlier_var_ui <- renderUI({
+    req(uploaded_data()) # Ensure data is loaded
+    numeric_vars <- names(uploaded_data())[sapply(uploaded_data(), is.numeric)]
+    
+    if (length(numeric_vars) > 0) {
+      selectInput(
+        inputId = "outlier_var", 
+        label = "Select Numerical Variable:", 
+        choices = numeric_vars, 
+        selected = NULL
+      )
+    } else {
+      tags$p("No numerical variables available for outlier handling.", style = "color: red;")
+    }
+  })
+  
+  # Apply Logic of Preprocessing 
+  
+  # Observe the selected variable and update the reactive value
+  observeEvent(input$missing_var, {
+    current_missing_var(input$missing_var)
+  })
+  
+  # Missing value handling logic
+  observeEvent(input$apply_missing, {
+    req(input$missing_var, input$missing_method, uploaded_data())
+    
+    data <- uploaded_data()
+    var <- input$missing_var
+    missing_count <- sum(is.na(data[[var]])) # Count missing values
+    
+    if (missing_count > 0) {
+      if (input$missing_method == "Suppression") {
+        # Remove rows with missing values
+        data <- data[!is.na(data[[var]]), ]
+      } else if (input$missing_method == "Replace with Mode") {
+        mode_val <- as.numeric(names(sort(table(data[[var]]), decreasing = TRUE)[1]))
+        data[[var]][is.na(data[[var]])] <- mode_val
+      } else if (input$missing_method == "Replace with Median") {
+        median_val <- median(data[[var]], na.rm = TRUE)
+        data[[var]][is.na(data[[var]])] <- median_val
+      } else if (input$missing_method == "Replace with Mean") {
+        mean_val <- mean(data[[var]], na.rm = TRUE)
+        data[[var]][is.na(data[[var]])] <- mean_val
+      }
+      
+      # Update the reactive storage
+      uploaded_data(data)
+      
+      # Show popup message with rows affected
+      showModal(
+        modalDialog(
+          title = "Missing Values Handled",
+          paste("The variable", var, "had", missing_count, "missing values."),
+          if (input$missing_method == "Suppression") {
+            paste(missing_count, "rows were removed.")
+          } else {
+            "The missing values have been replaced."
+          },
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        )
+      )
+    } else {
+      showNotification("No missing values in the selected variable.", type = "warning")
+    }
+  })
+  
+  observeEvent(input$apply_outliers, {
+    req(input$outlier_var, input$outlier_method, uploaded_data())
+    
+    data <- uploaded_data()
+    var <- input$outlier_var
+    
+    if (is.numeric(data[[var]])) {
+      # Detect outliers using the IQR method
+      iqr <- IQR(data[[var]], na.rm = TRUE)
+      q1 <- quantile(data[[var]], 0.25, na.rm = TRUE)
+      q3 <- quantile(data[[var]], 0.75, na.rm = TRUE)
+      lower_bound <- q1 - 1.5 * iqr
+      upper_bound <- q3 + 1.5 * iqr
+      
+      outliers <- which(data[[var]] < lower_bound | data[[var]] > upper_bound)
+      outlier_count <- length(outliers)
+      
+      if (outlier_count > 0) {
+        if (input$outlier_method == "Remove Outliers") {
+          # Remove outliers
+          data <- data[-outliers, ]
+        } else if (input$outlier_method == "Replace with Median") {
+          # Replace outliers with median
+          median_val <- median(data[[var]], na.rm = TRUE)
+          data[[var]][outliers] <- median_val
+        } else if (input$outlier_method == "Replace with Mean") {
+          # Replace outliers with mean
+          mean_val <- mean(data[[var]], na.rm = TRUE)
+          data[[var]][outliers] <- mean_val
+        }
+        
+        # Update the reactive storage
+        uploaded_data(data)
+        
+        # Show popup message with the number of outliers detected
+        showModal(
+          modalDialog(
+            title = "Outliers Handled",
+            paste("The variable", var, "had", outlier_count, "outliers detected."),
+            if (input$outlier_method == "Remove Outliers") {
+              paste(outlier_count, "rows were removed.")
+            } else {
+              "The outliers have been replaced."
+            },
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          )
+        )
+      } else {
+        showNotification("No outliers detected in the selected variable.", type = "warning")
+      }
+    } else {
+      showNotification("Selected variable is not numeric.", type = "error")
+    }
+  })
+  
+  
+  
+  
   # Mise à jour des choix pour les variables
   observe({
     req(uploaded_data())
