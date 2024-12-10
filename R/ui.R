@@ -79,10 +79,10 @@ ui <- dashboardPage(
           box(
             title = "Statistiques descriptives unidimensionnelle", status = "primary", solidHeader = TRUE,
             tabsetPanel(
-              tabPanel("Histogramme", numericInput("binwidth_input", "Binwidth:", value = 0.2, min = 0.01, step = 0.01), plotOutput("histogram")),
-              tabPanel("Box Plot", plotOutput("boxplot")),
+              tabPanel("Histogramme", numericInput("binwidth_input", "Binwidth:", value = 0.2, min = 0.01, step = 0.01), plotlyOutput("histogram")),
+              tabPanel("Box Plot", plotlyOutput("boxplot")),
               tabPanel("Extra", verbatimTextOutput("univariate_analysis")),
-              tabPanel("Pie Chart", plotOutput("pie_chart", height = 500, width = 600))
+              tabPanel("Pie Chart", plotlyOutput("pie_chart", height = 500, width = 600))
             ),
             width = 5
           ),
@@ -90,7 +90,7 @@ ui <- dashboardPage(
           box(
             title = "Analyse bidimensionnelle", status = "primary", solidHeader = TRUE,
             tabsetPanel(
-              tabPanel("correlation plot", plotOutput("bivariate_analysis")),
+              tabPanel("correlation plot", plotlyOutput("bivariate_analysis")),
               tabPanel("Correlation Matrix", plotOutput("correlation_matrix_plot")),
               tabPanel("Box Plot",plotOutput("boxplot_parallel"))
             ),
