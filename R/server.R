@@ -5,30 +5,55 @@ library(readxl)
 library(DT)
 library(plotly)
 server <- function(input, output, session) {
-  # Reactive data storage
-  uploaded_data <- reactiveVal(NULL)
+  # Reactive to store dataset
+  dataset <- reactiveVal(NULL)
   
-  observeEvent(input$file, {
-    req(input$file)
+  # Observer to load the dataset
+  observeEvent(input$load_data, {
+    req(input$file_input)  # Vérifie que l'utilisateur a choisi un fichier
     
-    file_ext <- tools::file_ext(input$file$name)
+    file_path <- input$file_input$datapath
+    file_name <- input$file_input$name
+    file_ext <- tools::file_ext(file_name)
     
     if (file_ext == "csv") {
-      data <- read.csv(input$file$datapath)
-    } else if (file_ext %in% c("xlsx", "xls")) {
-      sheet_names <- excel_sheets(input$file$datapath)
-      if ("Data" %in% sheet_names) {
-        data <- read_excel(input$file$datapath, sheet = "Data")
-      } else {
-        showNotification("Sheet 'Data' not found in the file.", type = "error")
-        return(NULL)
-      }
+      data <- read.csv(file_path)
+    } else if (file_ext == "xlsx") {
+      library(readxl)
+      data <- read_excel(file_path)
+    } else if (file_ext == "txt") {
+      data <- read.delim(file_path)
     } else {
-      showNotification("Unsupported file type", type = "error")
+      showNotification("Unsupported file type!", type = "error")
       return(NULL)
     }
     
-    uploaded_data(data)
+    dataset(data)  # Sauvegarde les données chargées
+    
+    # Met à jour les choix pour le selectInput
+    updateSelectInput(session, "target_variable", choices = names(data))
+  })
+  
+  # Output: Dataset Information
+  output$dataset_info <- renderPrint({
+    req(dataset())  # Assure que le dataset est chargé
+    
+    data <- dataset()
+    num_features <- ncol(data)
+    num_instances <- nrow(data)
+    file_name <- input$file_input$name
+    file_ext <- tools::file_ext(file_name)
+    
+    categories <- sapply(data, function(col) if (is.factor(col)) length(unique(col)) else NA)
+    num_categories <- sum(!is.na(categories))
+    
+    list(
+      "Title of the file" = file_name,
+      "Type of the file" = file_ext,
+      "Number of features" = num_features,
+      "Number of instances" = num_instances,
+      "Number of categories" = num_categories
+    )
   })
   
   # Aperçu des données
@@ -242,5 +267,212 @@ server <- function(input, output, session) {
       showNotification("Unsupported data type for Target Variable.", type = "error")
     }
   })
+  trained_model <- reactiveVal(NULL)
+  
+  # Observer pour entraîner le modèle quand on clique sur le bouton "Train Model"
+  observeEvent(input$train_model, {
+    req(input$target_variable, input$model_choice)  # Vérifier que les choix nécessaires sont faits
+    
+    # Charger les données et effectuer la séparation train/test
+    dataset <- req(data())  # Assurez-vous que vos données sont chargées et disponibles
+    target <- input$target_variable
+    split_method <- input$split_method
+    
+    if (split_method == "Holdout") {
+      train_index <- sample(seq_len(nrow(dataset)), size = floor(input$train_percentage / 100 * nrow(dataset)))
+      train_data <- dataset[train_index, ]
+      test_data <- dataset[-train_index, ]
+    } else if (split_method == "Cross-validation") {
+      train_data <- dataset  # Dans le cas de la cross-validation, on utilise toutes les données
+      test_data <- NULL      # Pas de test direct ici, mais ce sera géré lors de la validation croisée
+    }
+    
+    # Entraîner le modèle selon le choix de l'utilisateur
+    model <- NULL
+    if (input$model_choice == "SVM") {
+      library(e1071)
+      model <- svm(
+        as.formula(paste(target, "~ .")),
+        data = train_data,
+        cost = input$svm_C,
+        kernel = input$svm_kernel
+      )
+    } else if (input$model_choice == "Random Forest") {
+      library(randomForest)
+      model <- randomForest(
+        as.formula(paste(target, "~ .")),
+        data = train_data,
+        ntree = input$rf_trees
+      )
+    } else if (input$model_choice == "Logistic Regression") {
+      library(glmnet)
+      x <- model.matrix(as.formula(paste(target, "~ .")), train_data)[, -1]
+      y <- train_data[[target]]
+      model <- glmnet(
+        x, y,
+        alpha = ifelse(input$log_reg_penalty_type == "L1 (Lasso)", 1, 0),
+        lambda = input$log_reg_penalty_value
+      )
+    } else if (input$model_choice == "Linear Regression") {
+      model <- lm(as.formula(paste(target, "~ .")), data = train_data)
+    } else if (input$model_choice == "Decision Tree") {
+      library(rpart)
+      model <- rpart(
+        as.formula(paste(target, "~ .")),
+        data = train_data,
+        method = ifelse(is.numeric(train_data[[target]]), "anova", "class"),
+        control = rpart.control(maxdepth = input$dt_max_depth)
+      )
+    }
+    
+    # Stocker le modèle dans une variable réactive
+    trained_model(model)
+    
+    # Message de confirmation
+    showNotification("Model trained successfully!", type = "message")
+  })
+  
+  # Condition pour afficher le bouton "Save Model"
+  output$model_trained <- reactive({
+    !is.null(trained_model())
+  })
+  outputOptions(output, "model_trained", suspendWhenHidden = FALSE)
+  
+  # Logique pour le téléchargement du modèle
+  output$save_model <- downloadHandler(
+    filename = function() {
+      paste("trained_model_", Sys.Date(), ".RDS", sep = "")
+    },
+    content = function(file) {
+      saveRDS(trained_model(), file)
+    }
+  )
+  
+  # Charger et afficher un exemple de dataset
+  data <- reactive({
+    infile <- input$file
+    req(infile)
+    if (grepl("\\.csv$", infile$name)) {
+      read.csv(infile$datapath)
+    } else if (grepl("\\.xlsx$|\\.xls$", infile$name)) {
+      readxl::read_excel(infile$datapath)
+    }
+  })
+  
+  # Créer les jeux de données d'entraînement et de test
+  train_data <- reactive({
+    req(input$file)
+    dataset <- read.csv(input$file$datapath)
+    set.seed(123)  # Pour garantir la reproductibilité
+    
+    # Si Holdout est sélectionné
+    if (input$split_method == "Holdout") {
+      train_index <- sample(1:nrow(dataset), size = input$train_percentage / 100 * nrow(dataset))
+      dataset[train_index, ]
+    }
+    # Si Cross-validation est sélectionné
+    else if (input$split_method == "Cross-validation") {
+      k <- input$k_folds
+      folds <- cut(seq(1, nrow(dataset)), breaks = k, labels = FALSE)
+      train_index <- folds != 1  # Par exemple, pour la 1ère fold
+      dataset[train_index, ]
+    }
+  })
+  
+  # Créer les données de test
+  test_data <- reactive({
+    req(input$file)
+    dataset <- read.csv(input$file$datapath)
+    set.seed(123)
+    
+    # Si Holdout est sélectionné
+    if (input$split_method == "Holdout") {
+      train_index <- sample(1:nrow(dataset), size = input$train_percentage / 100 * nrow(dataset))
+      dataset[-train_index, ]  # Le complément pour le test
+    }
+    # Si Cross-validation est sélectionné
+    else if (input$split_method == "Cross-validation") {
+      k <- input$k_folds
+      folds <- cut(seq(1, nrow(dataset)), breaks = k, labels = FALSE)
+      test_index <- folds == 1  # Par exemple, pour la 1ère fold
+      dataset[test_index, ]
+    }
+  })
+  
+  
+  output$data_preview <- renderDT({
+    req(data())
+    datatable(data(), options = list(scrollX = TRUE))
+  })
+  # Reactive expression to compute predictions and metrics
+  test_predictions <- reactive({
+    req(trained_model(), test_data())  # Ensure model and test data exist
+    
+    # Make predictions
+    predictions <- predict(trained_model(), test_data()[-ncol(test_data())])
+    
+    # True labels
+    true_labels <- test_data()[[input$target_variable]]
+    
+    # Compute metrics and confusion matrix
+    confusion <- table(Predicted = predictions, Actual = true_labels)
+    precision <- sum(diag(confusion)) / sum(confusion)
+    recall <- diag(confusion) / rowSums(confusion)
+    f1_score <- 2 * ((precision * recall) / (precision + recall))
+    
+    # Return all values
+    list(
+      predictions = predictions,
+      true_labels = true_labels,
+      confusion = confusion,
+      metrics = list(
+        Precision = mean(precision, na.rm = TRUE),
+        Recall = mean(recall, na.rm = TRUE),
+        Accuracy = sum(diag(confusion)) / sum(confusion),
+        F1_Score = mean(f1_score, na.rm = TRUE)
+      )
+    )
+  })
+  
+  
+  # Metrics Output
+  output$evaluation_metrics <- renderPrint({
+    req(test_predictions())
+    metrics <- test_predictions()$metrics
+    metrics
+  })
+  
+  # Confusion Matrix Plot
+  output$confusion_matrix_plot <- renderPlot({
+    req(test_predictions())
+    confusion <- test_predictions()$confusion
+    heatmap(confusion, main = "Confusion Matrix", col = heat.colors(256), scale = "none", margins = c(5, 5))
+  })
+  
+  # ROC Curve and AUC
+  output$roc_curve <- renderPlot({
+    req(test_predictions())
+    library(pROC)
+    
+    # Compute ROC Curve
+    roc_curve <- roc(
+      test_predictions()$true_labels, 
+      as.numeric(test_predictions()$predictions), 
+      plot = TRUE, 
+      col = "blue",
+      main = "ROC Curve"
+    )
+    auc_value <- auc(roc_curve)
+    
+    # Add AUC to the plot
+    legend("bottomright", legend = paste("AUC =", round(auc_value, 3)), col = "blue", lwd = 2)
+  })
+  
+  output$auc_value <- renderPrint({
+    req(test_predictions())
+    roc_curve <- roc(test_predictions()$true_labels, as.numeric(test_predictions()$predictions))
+    auc(roc_curve)
+  })
+  
   
 }
