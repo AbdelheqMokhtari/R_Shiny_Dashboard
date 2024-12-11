@@ -1,21 +1,18 @@
 library(shiny)
 library(shinydashboard)
 library(bslib)
-library(readxl)  
 library(DT)
 library(plotly)
+library(reactable)
+
 ui <- dashboardPage(
-  dashboardHeader(title = "\U0001F504 Data Science Dashboard"),
+  dashboardHeader(title = "📊 Data Science Dashboard", titleWidth = 300),
+  
   dashboardSidebar(
-
-    sidebarMenu(
-      menuItem("Load Data & EDA", tabName = "load_data", icon = icon("file-upload")),
-
     width = 200,
     sidebarMenu(
       menuItem("Load Data", tabName = "load_data", icon = icon("file-upload", lib = "font-awesome")),
       menuItem("PreProcessing", tabName = "preprocessing", icon = icon("cogs")),
-
       menuItem("Analyse Data", tabName = "analyse_data", icon = icon("chart-line")),
       menuItem("ML Models", tabName = "ml_models", icon = icon("robot")),
       menuItem("Results", tabName = "results", icon = icon("chart-pie")),
@@ -23,43 +20,101 @@ ui <- dashboardPage(
       menuItem("About", tabName = "about", icon = icon("info-circle"))
     )
   ),
+  
   dashboardBody(
+    tags$head(
+      tags$style(HTML("
+        /* Customizing the Dashboard */
+        .skin-blue .main-header .logo {
+          background-color: #1f77b4; /* Header background */
+          color: white; /* Header text color */
+          font-size: 20px; /* Header font size */
+        }
+        .skin-blue .main-sidebar {
+          background-color: #343a40; /* Sidebar background */
+          color: #f8f9fa; /* Sidebar text color */
+        }
+        .skin-blue .sidebar-menu>li.active>a {
+          background-color: #17a2b8; /* Active menu item background */
+          color: white;
+        }
+        .skin-blue .sidebar-menu>li>a:hover {
+          background-color: #007bff; /* Hovered menu item background */
+          color: white;
+        }
+      "))
+    ),
+    
     tabItems(
       tabItem(
         tabName = "load_data",
         fluidRow(
           box(
-            title = "Upload Data", status = "primary", solidHeader = TRUE, width = 3,  
-            fileInput("file", "Choose a File", 
-                      accept = c(".csv", ".xlsx", ".xls", ".data"), 
-                      multiple = FALSE),
-            conditionalPanel(
-              condition = "input.file && input.file[0].name.endsWith('.data')",
-              fileInput("names_file", "Upload .names File", accept = c(".names"))
-            ),
-
-            DTOutput("data_preview")
-          )
-        )
-      ),
-      tabItem(
-        tabName = "analyse_data",
-        fluidRow(
-
+            title = "Loading Data",
+            status = "primary",
+            solidHeader = TRUE,
+            width = 4,
+            fileInput("fileInput", "Browse File", accept = c(".csv", ".xlsx")),
+            helpText("Upload a CSV or Excel file.")
           ),
-          
-          # Second box: Aperçu des données
-
           box(
-            title = "Aperçu des données", status = "primary", solidHeader = TRUE,
-            style = "overflow-x: auto;",
-            DTOutput("table"),
-            width = 9  
+            title = "File Details",
+            status = "info",
+            solidHeader = TRUE,
+            width = 4,
+            verbatimTextOutput("fileDetails")
           ),
-
-        )
-      ),
-      
+          box(
+            title = "Select Target Variable",
+            status = "success",
+            solidHeader = TRUE,
+            width = 4,
+            selectInput("target_variable", "Select the target variable", choices = NULL)
+          )
+        ),
+        fluidRow(
+          box(
+            title = "Data Exploration",
+            status = "warning",
+            solidHeader = TRUE,
+            width = 12,
+            tabsetPanel(
+              tabPanel(
+                title = "Aperçu des données", status = "primary", solidHeader = TRUE,
+                style = "overflow-x: auto;",
+                DTOutput("table"),
+                width = 9 
+              ),
+              tabPanel(
+                title = "Data Summary",
+                verbatimTextOutput("dataSummary")
+              )
+            )
+          )
+        ),
+        fluidRow(
+          box(
+            title = "Drop Feature",
+            status = "danger",
+            solidHeader = TRUE,
+            width = 12,
+            uiOutput("drop_feature_ui"),  # Use dynamic UI
+            actionButton("apply_drop", "Apply")
+          )
+        ),
+        fluidRow(
+          box(
+            title = "Variable Classification",
+            status = "warning",
+            solidHeader = TRUE,
+            width = 12,
+            DTOutput("var_classification_table"),  # Display table output here
+            
+          )
+        ),
+        ),
+        
+  
       tabItem(
         tabName = "preprocessing",
         fluidRow(
@@ -138,13 +193,13 @@ ui <- dashboardPage(
         tabName = "analyse_data",
         fluidRow(
           # Sélection des variables
-
           box(
             title = "Variable Selection", status = "primary", solidHeader = TRUE, width = 2,
             h3("Variable Selection"),
             selectInput("x_variable", "X Variable:", choices = NULL),
             selectInput("y_variable", "Y Variable:", choices = NULL)
           ),
+          # Statistiques descriptives unidimensionnelles
           box(
             title = "Statistiques descriptives unidimensionnelle", status = "primary", solidHeader = TRUE,
             tabsetPanel(
@@ -155,17 +210,19 @@ ui <- dashboardPage(
             ),
             width = 5
           ),
+          # Analyse bidimensionnelle
           box(
             title = "Analyse bidimensionnelle", status = "primary", solidHeader = TRUE,
             tabsetPanel(
               tabPanel("correlation plot", plotlyOutput("bivariate_analysis")),
               tabPanel("Correlation Matrix", plotOutput("correlation_matrix_plot")),
-              tabPanel("Box Plot", plotOutput("boxplot_parallel"))
+              tabPanel("Box Plot",plotOutput("boxplot_parallel"))
             ),
             width = 5
           )
         )
       ),
+      
       tabItem(
         tabName = "ml_models",
         fluidRow(
@@ -209,12 +266,6 @@ ui <- dashboardPage(
           ),
           box(
             title = "Model Selection", status = "primary", solidHeader = TRUE, width = 12,
-            selectInput(
-              "target_variable",
-              "Select Target Variable:",
-              choices = NULL,
-              selected = NULL
-            ),
             selectInput(
               "model_choice",
               "Select Model:",
@@ -263,43 +314,33 @@ ui <- dashboardPage(
             )
           ),
           box(
-            title = "Train & Save Model", status = "primary", solidHeader = TRUE, width = 12,
-            actionButton("train_model", "Train Model", icon = icon("play-circle")),
-            conditionalPanel(
-              condition = "output.model_trained",
-              downloadButton("save_model", "Save Model", icon = icon("download"))
-            )
+            title = "Train and Save Model", status = "primary", solidHeader = TRUE, width = 12,
+            actionButton("train_model", "Train Model", class = "btn-primary"),
+            uiOutput("save_model_ui") # Cet élément sera rendu dynamiquement après l'entraînement
           )
         )
       ),
-      tabItem(
-        tabName = "results",
-        fluidRow(
-          box(
-            title = "Model Evaluation", status = "success", solidHeader = TRUE, width = 12,
-            p("Evaluate the performance of your trained model on the test dataset."),
-            
-            # Metrics Table
+      
+        tabItem(
+          tabName = "results",
+          fluidRow(
             box(
-              title = "Evaluation Metrics", status = "primary", solidHeader = TRUE, width = 4,
-              verbatimTextOutput("evaluation_metrics")
+              title = "Model Metrics", status = "primary", solidHeader = TRUE, width = 4,
+              tableOutput("model_metrics")
             ),
-            
-            # Confusion Matrix
             box(
               title = "Confusion Matrix", status = "primary", solidHeader = TRUE, width = 4,
-              plotOutput("confusion_matrix_plot")
+              plotOutput("conf_matrix_plot")
             ),
-            
-            # ROC Curve and AUC
             box(
               title = "ROC Curve", status = "primary", solidHeader = TRUE, width = 4,
               plotOutput("roc_curve"),
-              verbatimTextOutput("auc_value")
+              h4("AUC Score:"),
+              textOutput("auc_score")
             )
           )
         )
-      )
+        
       
     )
   )
