@@ -4,6 +4,7 @@ library(bslib)
 library(readxl)  
 library(DT)
 library(plotly)
+library(ROSE)
 
 server <- function(input, output, session) {
   # Reactive data storage
@@ -486,59 +487,6 @@ output$target_plot <- renderPlot({
   }
 })
 
-output$resampling_method_ui <- renderUI({
-  req(uploaded_data())
-  req(input$target_variable)
-  
-  target_var <- uploaded_data()[[input$target_variable]]
-  if (is.factor(target_var)) {
-    selectInput(
-      inputId = "resampling_method",
-      label = "Select Resampling Method:",
-      choices = c("None", "Oversample", "Undersample"),
-      selected = "None"
-    )
-  } else {
-    tags$p("Resampling methods are applicable only to categorical target variables.", style = "color: red;")
-  }
-})
-
-# Resampling handler
-observeEvent(input$apply_resampling, {
-  req(uploaded_data())
-  req(input$resampling_method)
-  
-  target_var <- uploaded_data()[[input$target_variable]]
-  
-  if (is.factor(target_var)) {
-    data <- uploaded_data()
-    
-    if (input$resampling_method == "Oversampling") {
-      oversample_data <- caret::upSample(x = data[, !(names(data) %in% input$target_variable)], 
-                                         y = data[[input$target_variable]], 
-                                         yname = input$target_variable)
-      uploaded_data(oversample_data)
-      showNotification("Oversampling applied.", type = "message")
-    } else if (input$resampling_method == "Undersampling") {
-      undersample_data <- caret::downSample(x = data[, !(names(data) %in% input$target_variable)], 
-                                            y = data[[input$target_variable]], 
-                                            yname = input$target_variable)
-      uploaded_data(undersample_data)
-      showNotification("Undersampling applied.", type = "message")
-    } else {
-      showNotification("No resampling method selected.", type = "warning")
-    }
-  } else {
-    showNotification("Resampling methods are applicable only to categorical target variables.", type = "error")
-  }
-})
-
-output$table <- renderDT({
-  req(uploaded_data())
-  datatable(uploaded_data(), options = list(pageLength = 5))
-})
-
-
 
 
 
@@ -548,6 +496,7 @@ observe({
   req(uploaded_data())
   data <- uploaded_data()
   updateSelectInput(session, "x_variable", choices = names(data))
+  updateSelectInput(session, "x_variable_bi", choices = names(data))
   updateSelectInput(session, "y_variable", choices = names(data))
 })
 
@@ -555,7 +504,7 @@ observe({
 output$histogram <- renderPlotly({
   req(uploaded_data(), input$x_variable)
   data <- uploaded_data()
-  plot_ly(data, x = ~get(input$x_variable), type = "histogram", autobinx = FALSE, 
+  plot_ly(data, x = ~get(input$x_variable), type = "histogram", autobinx = FALSE,
           xbins = list(size = input$binwidth_input))
 })
 
@@ -581,48 +530,18 @@ output$pie_chart <- renderPlot({
   if (is.factor(variable) || is.character(variable)) {
     pie(table(variable), main = "Pie Chart", col = rainbow(length(unique(variable))))
   } else {
-    showNotification("Pie Chart is only available for categorical variables.", type = "error")
+    showNotification("Pie Chart is only disponible pour les variables catégoriques.", type = "error")
   }
 })
 
-# Analyse bidimensionnelle : Correlation plot
+# Analyse bidimensionnelle
 output$bivariate_analysis <- renderPlotly({
-  req(uploaded_data(), input$x_variable, input$y_variable)
+  req(uploaded_data(), input$x_variable_bi, input$y_variable)
   data <- uploaded_data()
-  plot_ly(data, x = ~get(input$x_variable), y = ~get(input$y_variable), type = "scatter", mode = "markers")
+  plot_ly(data, x = ~get(input$x_variable_bi), y = ~get(input$y_variable), type = "scatter", mode = "markers")
 })
 
-# Quantitative vs qualitative : Boxplots
-output$quant_vs_qual_table <- renderTable({
-  req(input$var_x, input$var_y, processed_data())
-  processed_data() %>%
-    group_by(!!sym(input$var_x)) %>%
-    summarise(
-      Moyenne = mean(!!sym(input$var_y), na.rm = TRUE),
-      Ecart_type = sd(!!sym(input$var_y), na.rm = TRUE)
-    )
-})
-
-output$boxplot_parallel <- renderPlot({
-  req(uploaded_data(), input$x_variable, input$y_variable)
-  
-  data <- uploaded_data()
-  x <- data[[input$x_variable]]  # Variable catégorielle
-  y <- data[[input$y_variable]]  # Variable numérique
-  
-  validate(
-    need(is.numeric(y), "Y Variable must be numeric."),
-    need(is.factor(x) || is.character(x), "X Variable must be categorical.")
-  )
-  
-  ggplot(data, aes(x = as.factor(x), y = y)) +
-    geom_boxplot(fill = "orange", alpha = 0.7) +
-    theme_minimal() +
-    labs(title = "Parallel Boxplots", x = input$x_variable, y = input$y_variable)
-})
-
-
-# Correlation Matrix
+# Matrice de corrélation
 output$correlation_matrix_plot <- renderPlot({
   req(uploaded_data())
   numeric_data <- uploaded_data()[, sapply(uploaded_data(), is.numeric)]
@@ -630,6 +549,21 @@ output$correlation_matrix_plot <- renderPlot({
   corrplot::corrplot(corr, method = "color", type = "upper")
 })
 
+# Boxplots parallèles
+output$boxplot_parallel <- renderPlot({
+  req(uploaded_data(), input$x_variable_bi, input$y_variable)
+  data <- uploaded_data()
+  x <- data[[input$x_variable_bi]]
+  y <- data[[input$y_variable]]
+  validate(
+    need(is.numeric(y), "Y Variable must be numeric."),
+    need(is.factor(x) || is.character(x), "X Variable must be categorical.")
+  )
+  ggplot(data, aes(x = as.factor(x), y = y)) +
+    geom_boxplot(fill = "orange", alpha = 0.7) +
+    theme_minimal() +
+    labs(title = "Parallel Boxplots", x = input$x_variable_bi, y = input$y_variable)
+})
 # Observer pour synchroniser les sliders
 observeEvent(input$train_percentage, {
   updateSliderInput(

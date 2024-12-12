@@ -208,34 +208,39 @@ ui <- dashboardPage(
       
       tabItem(
         tabName = "analyse_data",
+        # Ligne 1 : Analyse unidimensionnelle
         fluidRow(
-          # Sélection des variables
+          # Sélection de la variable
           box(
-            title = "Variable Selection", status = "primary", solidHeader = TRUE, width = 2,
-            h3("Variable Selection"),
-            selectInput("x_variable", "X Variable:", choices = NULL),
-            selectInput("y_variable", "Y Variable:", choices = NULL)
+            title = "Sélection de la variable", status = "primary", solidHeader = TRUE, width = 6,
+            selectInput("x_variable", "Variable:", choices = NULL)
           ),
-          # Statistiques descriptives unidimensionnelles
+          # Analyse unidimensionnelle
           box(
-            title = "Statistiques descriptives unidimensionnelle", status = "primary", solidHeader = TRUE,
+            title = "Analyse unidimensionnelle", status = "primary", solidHeader = TRUE, width = 6,
             tabsetPanel(
               tabPanel("Histogramme", numericInput("binwidth_input", "Binwidth:", value = 0.2, min = 0.01, step = 0.01), plotlyOutput("histogram")),
               tabPanel("Box Plot", plotlyOutput("boxplot")),
               tabPanel("Extra", verbatimTextOutput("univariate_analysis")),
               tabPanel("Pie Chart", plotOutput("pie_chart", height = 500, width = 600))
-            ),
-            width = 5
-          ),
+            )
+          )
+        ),
+        # Ligne 2 : Analyse bidimensionnelle
+        fluidRow(
           # Analyse bidimensionnelle
           box(
-            title = "Analyse bidimensionnelle", status = "primary", solidHeader = TRUE,
+            title = "Analyse bidimensionnelle", status = "primary", solidHeader = TRUE, width = 6,
             tabsetPanel(
-              tabPanel("correlation plot", plotlyOutput("bivariate_analysis")),
+              tabPanel("Correlation Plot", plotlyOutput("bivariate_analysis")),
               tabPanel("Correlation Matrix", plotOutput("correlation_matrix_plot")),
-              tabPanel("Box Plot",plotOutput("boxplot_parallel"))
-            ),
-            width = 5
+              tabPanel("Box Plot", plotOutput("boxplot_parallel"))
+            )
+          ),
+          box(
+            title = "Sélection des variables", status = "primary", solidHeader = TRUE, width = 6,
+            selectInput("x_variable_bi", "X Variable:", choices = NULL),
+            selectInput("y_variable", "Y Variable:", choices = NULL)
           )
         )
       ),
