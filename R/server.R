@@ -5,9 +5,14 @@ library(readxl)
 library(DT)
 library(plotly)
 server <- function(input, output, session) {
+  
   # Reactive data storage
   uploaded_data <- reactiveVal(NULL)
   column_types <- reactiveVal(NULL)
+  derived_columns <- reactiveVal(character(0))  # New reactive value to track derived columns
+  
+  # Reactive value to store original column names
+  original_columns <- reactiveVal(NULL)
   
   # Main observer for file input
   observeEvent(input$fileInput, {
@@ -18,7 +23,7 @@ server <- function(input, output, session) {
     
     uploaded_data(data)  # Store the loaded data in a reactive value
     column_types(sapply(data, class))  # Store column types
-    
+    original_columns(names(data))  # Store original column names
     update_ui_after_file_upload(data, input$fileInput)  # Update the UI components
   })
   
@@ -41,32 +46,47 @@ server <- function(input, output, session) {
       return(NULL)
     }
   }
+  # Function to render Drop Feature UI
+  render_drop_feature_ui <- function() {
+    renderUI({
+      req(uploaded_data())
+      selectInput(
+        "drop_feature",
+        "Select Feature to Drop:",
+        choices = original_columns(),  # Use original columns
+        selected = NULL
+      )
+    })
+  }
   
-  # Function to update UI components after file upload
-  update_ui_after_file_upload <- function(data, fileInput) {
-    # Update target variable selection
-    output$target_variable <- renderUI({
+  # Function to render Target Variable UI
+  render_target_variable_ui <- function() {
+    renderUI({
       req(uploaded_data())
-      selectInput("target_variable", "Select the target variable", 
-                  choices = names(uploaded_data()), 
-                  selected = NULL)
+      data <- uploaded_data()
+      
+      # Exclude derived columns (created during transformations or encoding)
+      available_columns <- setdiff(original_columns(), derived_columns())
+      
+      selectInput(
+        "target_variable",
+        "Select the Target Variable:",
+        choices = available_columns,  # Use only original columns
+        selected = NULL
+      )
     })
-    
-    # Update drop feature choices dynamically
-    output$drop_feature_ui <- renderUI({
-      req(uploaded_data())
-      selectInput("drop_feature", "Select Feature to Drop:", 
-                  choices = names(uploaded_data()), 
-                  selected = NULL)
-    })
-    
-    # Display uploaded file name
-    output$fileName <- renderText({
+  }
+  
+  # Function to render uploaded file name
+  render_file_name <- function(fileInput) {
+    renderText({
       paste("Uploaded file:", fileInput$name)
     })
-    
-    # Display file details
-    output$fileDetails <- renderText({
+  }
+  
+  # Function to render file details
+  render_file_details <- function(fileInput) {
+    renderText({
       req(uploaded_data())
       
       num_features <- ncol(uploaded_data())
@@ -87,6 +107,27 @@ server <- function(input, output, session) {
   }
   
   
+  # Function to update UI components after file upload
+  update_ui_after_file_upload <- function(data, fileInput) {
+    output$drop_feature_ui <- render_drop_feature_ui()
+    output$target_variable <- render_target_variable_ui()
+    output$fileName <- render_file_name(fileInput)
+    output$fileDetails <- render_file_details(fileInput) 
+  }
+    
+
+  
+  # Helper function to drop the selected feature
+  drop_selected_feature <- function(selected_feature) {
+    updated_data <- uploaded_data()[, !(names(uploaded_data()) %in% selected_feature)]
+    uploaded_data(updated_data)  # Update the dataset
+    
+    # Remove dropped features from derived columns
+    derived_columns(setdiff(derived_columns(), selected_feature))
+    
+    update_ui_components()  # Update UI components
+  }
+  
   # Data Table Output: Display data preview
   output$dataHead <- renderDT({
     req(uploaded_data())
@@ -102,16 +143,24 @@ server <- function(input, output, session) {
   
   # Observe feature drop button click
   observeEvent(input$apply_drop, {
-    req(uploaded_data())  # Ensure data is uploaded
+    req(uploaded_data())
     selected_feature <- input$drop_feature
     
-    # Validate the selected feature
     if (!is.null(selected_feature) && selected_feature != "") {
-      drop_selected_feature(selected_feature)  # Call helper function to drop the feature
+      data <- uploaded_data()
+      data <- data[, !(names(data) %in% selected_feature)]  # Drop the selected feature
+      uploaded_data(data)  # Update the reactive dataset
+      
+      # Update original and derived columns
+      original_columns(setdiff(original_columns(), selected_feature))
+      derived_columns(setdiff(derived_columns(), selected_feature))
+      
+      update_ui_components()
     } else {
       showNotification("Please select a valid feature to drop.", type = "warning")
     }
   })
+  
   
   # Helper function to drop the selected feature and update the dataset
   drop_selected_feature <- function(selected_feature) {
@@ -202,6 +251,7 @@ output$var_classification_table <- renderDT({
   # Display the classification table
   datatable(classification_df, options = list(pageLength = 5))
 })
+
 output$missing_var_ui <- renderUI({
   req(uploaded_data()) # Ensure data is loaded
   selectInput(
@@ -223,26 +273,28 @@ output$missing_percent <- renderText({
 
 current_missing_var <- reactiveVal(NULL)
 
-output$missing_method_ui <- renderUI({
-  req(input$missing_var, uploaded_data())
-  var <- uploaded_data()[[input$missing_var]]
-  if (sum(is.na(var)) > 0) {
-    selectInput(
-      inputId = "missing_method", 
-      label = "Select Method to Handle Missing Values:", 
-      choices = c("Suppression", "Replace with Mode", "Replace with Median", "Replace with Mean"), 
-      selected = current_missing_var() # Preserve the current selection
-    )
-  } else {
-    tags$p("No missing values in the selected variable.", style = "color: green;")
-  }
+# Dynamic Selection for missing values 
+
+output$missing_var_ui <- renderUI({
+  req(uploaded_data())
+  
+  data <- uploaded_data()
+  variables <- setdiff(names(data), derived_columns())  # Exclude derived columns
+  
+  selectInput(
+    inputId = "missing_var", 
+    label = "Select Variable to Handle Missing Values:", 
+    choices = variables, 
+    selected = NULL
+  )
 })
 
 # Dynamic selection for outliers 
 
 output$outlier_var_ui <- renderUI({
-  req(uploaded_data()) # Ensure data is loaded
-  numeric_vars <- names(uploaded_data())[sapply(uploaded_data(), is.numeric)]
+  req(uploaded_data())
+  
+  numeric_vars <- setdiff(names(uploaded_data())[sapply(uploaded_data(), is.numeric)], derived_columns())
   
   if (length(numeric_vars) > 0) {
     selectInput(
@@ -257,14 +309,13 @@ output$outlier_var_ui <- renderUI({
 })
 
 
-
-
+# Dynamically selecting Data Transformation
 output$transform_var_ui <- renderUI({
   req(uploaded_data())
-  req(column_types())
   
-  col_types <- column_types()
-  numeric_vars <- names(col_types[col_types %in% c("numeric", "integer")])
+  data <- uploaded_data()
+  # Dynamically identify numerical columns excluding derived columns
+  numeric_vars <- setdiff(names(data)[sapply(data, is.numeric)], derived_columns())
   
   selectizeInput(
     inputId = "transform_var",
@@ -275,15 +326,12 @@ output$transform_var_ui <- renderUI({
   )
 })
 
-
-
 # Data Encoding Variable Selection
-
 output$encoding_var_ui <- renderUI({
   req(uploaded_data())
   
-  # Identify categorical variables (character or factor types)
   data <- uploaded_data()
+  # Dynamically identify categorical columns in the current dataset
   categorical_vars <- names(data)[sapply(data, function(col) is.factor(col) || is.character(col))]
   
   selectizeInput(
@@ -294,7 +342,6 @@ output$encoding_var_ui <- renderUI({
     multiple = TRUE
   )
 })
-
 
 
 # Apply Logic of Preprocessing 
@@ -428,20 +475,21 @@ observeEvent(input$apply_transformation, {
     }
   }
   
-  uploaded_data(data)
+  uploaded_data(data) # Update the dataset
   showNotification("Transformation applied successfully!", type = "message")
 })
 
 
 # Handling Data Encoding Logic
 
+# Observer for applying encoding
 observeEvent(input$apply_encoding, {
   req(uploaded_data())
   req(input$encoding_var)
   
   data <- uploaded_data()
   selected_vars <- input$encoding_var
-  col_types <- column_types()
+  new_columns <- character(0)  # Initialize new_columns
   
   if (input$encoding_method == "Label Encoding") {
     for (var in selected_vars) {
@@ -449,17 +497,16 @@ observeEvent(input$apply_encoding, {
     }
   } else if (input$encoding_method == "One-Hot Encoding") {
     one_hot <- model.matrix(~ . - 1, data[selected_vars, drop = FALSE])
+    new_columns <- colnames(one_hot)  # Capture names of new columns
     data <- cbind(data[, !(names(data) %in% selected_vars)], one_hot)
   }
   
-  # Update dataset and preserve original column types
-  uploaded_data(data)
-  column_types(col_types) # Keep column types unchanged
+  # Track derived columns
+  derived_columns(union(derived_columns(), new_columns))
+  
+  uploaded_data(data)  # Update the reactive dataset
   showNotification("Encoding applied successfully!", type = "message")
 })
-
-
-
 
 # Mise à jour des choix pour les variables
 observe({
