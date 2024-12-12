@@ -61,23 +61,53 @@ server <- function(input, output, session) {
     })
   }
   
-  # Function to render Target Variable UI
-  render_target_variable_ui <- function() {
-    renderUI({
-      req(uploaded_data())
-      data <- uploaded_data()
-      
-      # Exclude derived columns (created during transformations or encoding)
-      available_columns <- setdiff(original_columns(), derived_columns())
-      
-      selectInput(
-        "target_variable",
-        "Select the Target Variable:",
-        choices = available_columns,  # Use only original columns
-        selected = NULL
-      )
-    })
-  }
+  # Reactive values to track target variable and its state
+  target_variable <- reactiveVal(NULL)
+  target_validated <- reactiveVal(FALSE)  # To track if target is validated
+  
+  # Dynamic rendering of options for transformations
+  output$target_variable_options <- renderUI({
+    req(uploaded_data())
+    req(input$target_variable)
+    
+    # Get column type
+    variable_type <- column_types()[[input$target_variable]]
+    
+    if (variable_type %in% c("factor", "character")) {
+      checkboxInput("apply_label_encoding", "Apply Label Encoding?", value = FALSE)
+    } else if (variable_type %in% c("numeric", "integer")) {
+      checkboxInput("apply_log_transformation", "Apply Log Transformation?", value = FALSE)
+    } else {
+      NULL  # No transformation options for other types
+    }
+  })
+  
+  # Observe when the validate button is clicked
+  observeEvent(input$validate_target, {
+    req(input$target_variable)
+    req(!target_validated())  # Ensure it hasn't already been validated
+    
+    # Mark the target as validated
+    target_variable(input$target_variable)
+    target_validated(TRUE)
+    
+    # Disable inputs to prevent further changes
+    shinyjs::disable("target_variable")
+    shinyjs::disable("apply_label_encoding")
+    shinyjs::disable("apply_log_transformation")
+    shinyjs::disable("validate_target")
+    
+    # Extract target variable and remove it from the dataset
+    data <- uploaded_data()
+    Y <- data[[input$target_variable]]
+    assign("Y", Y, envir = .GlobalEnv)  # Store target variable (can be improved)
+    data <- data[, !names(data) %in% input$target_variable, drop = FALSE]
+    uploaded_data(data)
+    
+    showNotification("Target variable validated and stored as 'Y'.", type = "message")
+  })
+  
+  
   
   # Function to render uploaded file name
   render_file_name <- function(fileInput) {
@@ -112,7 +142,6 @@ server <- function(input, output, session) {
   # Function to update UI components after file upload
   update_ui_after_file_upload <- function(data, fileInput) {
     output$drop_feature_ui <- render_drop_feature_ui()
-    output$target_variable <- render_target_variable_ui()
     output$fileName <- render_file_name(fileInput)
     output$fileDetails <- render_file_details(fileInput) 
   }
@@ -163,13 +192,6 @@ server <- function(input, output, session) {
     }
   })
   
-  
-  # Helper function to drop the selected feature and update the dataset
-  drop_selected_feature <- function(selected_feature) {
-    updated_data <- uploaded_data()[, !(names(uploaded_data()) %in% selected_feature)]
-    uploaded_data(updated_data)  # Update the reactive dataset
-    update_ui_components()       # Update related UI components
-  }
   
   # Function to update UI components dynamically
   update_ui_components <- function() {
@@ -346,7 +368,7 @@ server <- function(input, output, session) {
   })
 
 
-  # Apply Logic of Preprocessing 
+  # Apply Logic of Pre-processing 
 
   # Observe the selected variable and update the reactive value
   observeEvent(input$missing_var, {

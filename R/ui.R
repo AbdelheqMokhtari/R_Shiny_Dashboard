@@ -4,6 +4,7 @@ library(bslib)
 library(DT)
 library(plotly)
 library(reactable)
+library(shinyjs)
 
 ui <- dashboardPage(
   dashboardHeader(title = "📊 Data Science Dashboard", titleWidth = 300),
@@ -64,12 +65,15 @@ ui <- dashboardPage(
             width = 4,
             verbatimTextOutput("fileDetails")
           ),
+          useShinyjs(),
           box(
             title = "Select Target Variable",
             status = "success",
             solidHeader = TRUE,
             width = 4,
-            selectInput("target_variable", "Select the target variable", choices = NULL)
+            selectInput("target_variable", "Select the Target Variable", choices = NULL),
+            uiOutput("target_variable_options"), # Dynamically rendered checkbox
+            actionButton("validate_target", "Validate Target Variable")
           )
         ),
         fluidRow(
