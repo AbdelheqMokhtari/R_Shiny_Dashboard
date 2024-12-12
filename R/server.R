@@ -4,6 +4,7 @@ library(bslib)
 library(readxl)  
 library(DT)
 library(plotly)
+
 server <- function(input, output, session) {
   # Reactive data storage
   uploaded_data <- reactiveVal(NULL)
@@ -437,6 +438,87 @@ observeEvent(input$apply_encoding, {
   column_types(col_types) # Keep column types unchanged
   showNotification("Encoding applied successfully!", type = "message")
 })
+
+
+# Create a reactive expression to generate the histogram
+output$target_plot <- renderPlot({
+  req(uploaded_data())
+  req(input$target_variable)
+  
+  # Get the target variable
+  target_var <- uploaded_data()[[input$target_variable]]
+  
+  # Check if the target variable is numeric
+  if (is.numeric(target_var)) {
+    # Create a histogram using ggplot2
+    ggplot(data.frame(x = target_var), aes(x = x)) + 
+      geom_histogram(color = "black", fill = "lightblue", binwidth = 1) + 
+      labs(title = paste("Histogram of", input$target_variable), 
+           x = input$target_variable, 
+           y = "Frequency")
+  } else {
+    # If the target variable is not numeric, create a bar plot using ggplot2
+    ggplot(data.frame(x = target_var), aes(x = x)) + 
+      geom_bar(stat = "count", color = "black", fill = "lightblue") + 
+      labs(title = paste("Bar Plot of", input$target_variable), 
+           x = input$target_variable, 
+           y = "Frequency")
+  }
+})
+
+output$resampling_method_ui <- renderUI({
+  req(uploaded_data())
+  req(input$target_variable)
+  
+  target_var <- uploaded_data()[[input$target_variable]]
+  if (is.factor(target_var)) {
+    selectInput(
+      inputId = "resampling_method",
+      label = "Select Resampling Method:",
+      choices = c("None", "Oversample", "Undersample"),
+      selected = "None"
+    )
+  } else {
+    tags$p("Resampling methods are applicable only to categorical target variables.", style = "color: red;")
+  }
+})
+
+# Resampling handler
+observeEvent(input$apply_resampling, {
+  req(uploaded_data())
+  req(input$resampling_method)
+  
+  target_var <- uploaded_data()[[input$target_variable]]
+  
+  if (is.factor(target_var)) {
+    data <- uploaded_data()
+    
+    if (input$resampling_method == "Oversampling") {
+      oversample_data <- caret::upSample(x = data[, !(names(data) %in% input$target_variable)], 
+                                         y = data[[input$target_variable]], 
+                                         yname = input$target_variable)
+      uploaded_data(oversample_data)
+      showNotification("Oversampling applied.", type = "message")
+    } else if (input$resampling_method == "Undersampling") {
+      undersample_data <- caret::downSample(x = data[, !(names(data) %in% input$target_variable)], 
+                                            y = data[[input$target_variable]], 
+                                            yname = input$target_variable)
+      uploaded_data(undersample_data)
+      showNotification("Undersampling applied.", type = "message")
+    } else {
+      showNotification("No resampling method selected.", type = "warning")
+    }
+  } else {
+    showNotification("Resampling methods are applicable only to categorical target variables.", type = "error")
+  }
+})
+
+output$table <- renderDT({
+  req(uploaded_data())
+  datatable(uploaded_data(), options = list(pageLength = 5))
+})
+
+
 
 
 

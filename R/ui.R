@@ -185,6 +185,23 @@ ui <- dashboardPage(
             ),
             actionButton("apply_encoding", "Apply")
           )
+        ),
+        fluidRow(
+          sidebarLayout(
+            sidebarPanel(
+              selectInput("sampling_method", "Choisir une méthode de rééchantillonnage :", 
+                          choices = c("None", "Oversampling", "Undersampling")),
+              actionButton("apply_resampling", "Apply resampling")
+            ),
+            mainPanel(
+              box(
+                title = "Histogram of the target variable",
+                status = "primary",
+                solidHeader = TRUE,
+                plotOutput("target_plot")
+              )
+            )
+          )
         )
       ),
       
