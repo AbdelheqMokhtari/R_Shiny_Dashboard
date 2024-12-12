@@ -8,23 +8,31 @@ library(plotly)
 server <- function(input, output, session) {
   # Reactive data storage
   uploaded_data <- reactiveVal(NULL)
-  
   column_types <- reactiveVal(NULL)
   
-  # Watch for the file input event
+  # Main observer for file input
   observeEvent(input$fileInput, {
-    req(input$fileInput)  # Ensure the file is uploaded
+    req(input$fileInput)
     
-    # Read the file based on its extension
-    file_ext <- tools::file_ext(input$fileInput$name)
-    data <- NULL
+    data <- load_file_data(input$fileInput)  # Load the file data
+    if (is.null(data)) return(NULL)  # Stop if data couldn't be loaded
+    
+    uploaded_data(data)  # Store the loaded data in a reactive value
+    column_types(sapply(data, class))  # Store column types
+    
+    update_ui_after_file_upload(data, input$fileInput)  # Update the UI components
+  })
+  
+  # Function to load data based on file type
+  load_file_data <- function(fileInput) {
+    file_ext <- tools::file_ext(fileInput$name)
     
     if (file_ext == "csv") {
-      data <- read.csv(input$fileInput$datapath)
+      return(read.csv(fileInput$datapath))
     } else if (file_ext %in% c("xlsx", "xls")) {
-      sheet_names <- excel_sheets(input$fileInput$datapath)
+      sheet_names <- excel_sheets(fileInput$datapath)
       if ("Data" %in% sheet_names) {
-        data <- read_excel(input$fileInput$datapath, sheet = "Data")
+        return(read_excel(fileInput$datapath, sheet = "Data"))
       } else {
         showNotification("Sheet 'Data' not found in the file.", type = "error")
         return(NULL)
@@ -33,16 +41,16 @@ server <- function(input, output, session) {
       showNotification("Unsupported file type", type = "error")
       return(NULL)
     }
-    
-    # Store the loaded data in a reactive value
-    uploaded_data(data)
-    
-    # Dynamically update the target variable selection in the third box
+  }
+  
+  # Function to update UI components after file upload
+  update_ui_after_file_upload <- function(data, fileInput) {
+    # Update target variable selection
     output$target_variable <- renderUI({
-      req(uploaded_data())  # Ensure data is available
+      req(uploaded_data())
       selectInput("target_variable", "Select the target variable", 
-                  choices = names(uploaded_data()),  # Column names as choices
-                  selected = NULL)  # Default selection
+                  choices = names(uploaded_data()), 
+                  selected = NULL)
     })
     
     # Update drop feature choices dynamically
@@ -53,23 +61,22 @@ server <- function(input, output, session) {
                   selected = NULL)
     })
     
-    # Display the uploaded file name in the first box
+    # Display uploaded file name
     output$fileName <- renderText({
-      paste("Uploaded file:", input$fileInput$name)  # Display file name
+      paste("Uploaded file:", fileInput$name)
     })
     
+    # Display file details
     output$fileDetails <- renderText({
-      req(uploaded_data())  # Ensure data is available
+      req(uploaded_data())
       
-      # Get the file format and details
       num_features <- ncol(uploaded_data())
       num_instances <- nrow(uploaded_data())
-      num_categorical <- sum(sapply(uploaded_data(), function(x) is.factor(x) || is.character(x)))  # Count categorical columns
-      file_ext <- tools::file_ext(input$fileInput$name)  # Get file extension from the uploaded file
+      num_categorical <- sum(sapply(uploaded_data(), function(x) is.factor(x) || is.character(x)))
+      file_ext <- tools::file_ext(fileInput$name)
       
-      # Format the details to display
       details <- paste(
-        "File Name: ", input$fileInput$name, "\n",  # Access the file name here
+        "File Name: ", fileInput$name, "\n",
         "File format: ", file_ext, "\n",
         "Number of features (columns): ", num_features, "\n",
         "Number of instances (rows): ", num_instances, "\n",
@@ -78,9 +85,8 @@ server <- function(input, output, session) {
       
       return(details)
     })
-    
-    column_types(sapply(data, class))
-  })
+  }
+  
   
   # Data Table Output: Display data preview
   output$dataHead <- renderDT({
@@ -95,32 +101,46 @@ server <- function(input, output, session) {
     str(uploaded_data())
   })
   
-  # Drop Feature Logic
+  # Observe feature drop button click
   observeEvent(input$apply_drop, {
-    req(uploaded_data())
+    req(uploaded_data())  # Ensure data is uploaded
     selected_feature <- input$drop_feature
+    
+    # Validate the selected feature
     if (!is.null(selected_feature) && selected_feature != "") {
-      updated_data <- uploaded_data()[, !(names(uploaded_data()) %in% selected_feature)]
-      uploaded_data(updated_data)  # Update the reactive data
-      
-      # Update UI components to reflect changes
-      output$drop_feature_ui <- renderUI({
-        req(uploaded_data())
-        selectInput("drop_feature", "Select Feature to Drop:", 
-                    choices = names(uploaded_data()), 
-                    selected = NULL)
-      })
-      
-      output$target_variable <- renderUI({
-        req(uploaded_data())
-        selectInput("target_variable", "Select the target variable", 
-                    choices = names(uploaded_data()), 
-                    selected = NULL)
-      })
+      drop_selected_feature(selected_feature)  # Call helper function to drop the feature
+    } else {
+      showNotification("Please select a valid feature to drop.", type = "warning")
     }
   })
   
-  # Example: Display updated data table
+  # Helper function to drop the selected feature and update the dataset
+  drop_selected_feature <- function(selected_feature) {
+    updated_data <- uploaded_data()[, !(names(uploaded_data()) %in% selected_feature)]
+    uploaded_data(updated_data)  # Update the reactive dataset
+    update_ui_components()       # Update related UI components
+  }
+  
+  # Function to update UI components dynamically
+  update_ui_components <- function() {
+    # Update drop feature UI
+    output$drop_feature_ui <- renderUI({
+      req(uploaded_data())
+      selectInput("drop_feature", "Select Feature to Drop:", 
+                  choices = names(uploaded_data()), 
+                  selected = NULL)
+    })
+    
+    # Update target variable UI
+    output$target_variable <- renderUI({
+      req(uploaded_data())
+      selectInput("target_variable", "Select the Target Variable:", 
+                  choices = names(uploaded_data()), 
+                  selected = NULL)
+    })
+  }
+  
+  # Display updated data table
   output$table <- renderDT({
     req(uploaded_data())
     datatable(uploaded_data(), options = list(pageLength = 5))
