@@ -5,6 +5,7 @@ library(DT)
 library(plotly)
 library(reactable)
 library(shinyjs)
+library(shinyjqui)
 
 ui <- dashboardPage(
   dashboardHeader(title = "📊 Data Science Dashboard", titleWidth = 300),
@@ -54,7 +55,7 @@ ui <- dashboardPage(
             title = "Loading Data",
             status = "primary",
             solidHeader = TRUE,
-            width = 4,
+            width = 6,
             fileInput("fileInput", "Browse File", accept = c(".csv", ".xlsx")),
             helpText("Upload a CSV or Excel file.")
           ),
@@ -62,18 +63,8 @@ ui <- dashboardPage(
             title = "File Details",
             status = "info",
             solidHeader = TRUE,
-            width = 4,
+            width = 6,
             verbatimTextOutput("fileDetails")
-          ),
-          useShinyjs(),
-          box(
-            title = "Select Target Variable",
-            status = "success",
-            solidHeader = TRUE,
-            width = 4,
-            selectInput("target_variable", "Select the Target Variable", choices = NULL),
-            uiOutput("target_variable_options"), # Dynamically rendered checkbox
-            actionButton("validate_target", "Validate Target Variable")
           )
         ),
         fluidRow(
@@ -84,14 +75,14 @@ ui <- dashboardPage(
             width = 12,
             tabsetPanel(
               tabPanel(
-                title = "Aperçu des données", status = "primary", solidHeader = TRUE,
+                title = "Show Data", status = "primary", solidHeader = TRUE,
                 style = "overflow-x: auto;",
                 DTOutput("table"),
-                width = 9 
+                width = 9
               ),
               tabPanel(
                 title = "Data Summary",
-                verbatimTextOutput("dataSummary")
+                DTOutput("dataSummary")  # Change from verbatimTextOutput
               )
             )
           )
@@ -108,17 +99,17 @@ ui <- dashboardPage(
         ),
         fluidRow(
           box(
-            title = "Variable Classification",
+            title = "Drag & Drop: Switch Variable Type",
             status = "warning",
             solidHeader = TRUE,
             width = 12,
-            DTOutput("var_classification_table"),  # Display table output here
-            
+            uiOutput("drag_drop_ui"),
+            actionButton("apply_switch", "Apply Switch")
           )
         ),
-        ),
-        
-  
+      ),
+      
+      
       tabItem(
         tabName = "preprocessing",
         fluidRow(
@@ -189,6 +180,30 @@ ui <- dashboardPage(
             ),
             actionButton("apply_encoding", "Apply")
           )
+        ),
+        fluidRow(
+          column(
+            width = 12,
+            div(
+              style = "text-align: center; margin-top: 20px; margin-bottom: 30px;",  # Added margin-bottom
+              actionButton("submit_data", "Submit", 
+                           style = "padding: 10px 20px; font-size: 18px; background-color: #007BFF; color: white;"),
+              downloadButton("save_data", "Save", 
+                             class = "btn btn-secondary shiny-disabled",
+                             style = "padding: 10px 20px; font-size: 18px; margin-left: 20px;")
+            )
+          )
+         
+        ),
+        fluidRow(
+          # Display Submitted Data Table
+          box(
+            title = "Data Table",
+            status = "info",
+            solidHeader = TRUE,
+            width = 12,
+            dataTableOutput("submitted_table")
+          )
         )
       ),
       
@@ -230,121 +245,64 @@ ui <- dashboardPage(
       tabItem(
         tabName = "ml_models",
         fluidRow(
+          # First box: Target variable selection
           box(
-            title = "Split Data", status = "primary", solidHeader = TRUE, width = 12,
+            title = "Select Target Variable",
+            status = "primary",
+            width = 3,
             selectInput(
-              "split_method",
-              "Choose a Data Split Method:",
-              choices = c("Holdout", "Cross-validation"),
-              selected = "Holdout"
+              inputId = "target_var",
+              label = "Choose Target Variable:",
+              choices = NULL
             ),
-            conditionalPanel(
-              condition = "input.split_method == 'Holdout'",
-              sliderInput(
-                "train_percentage",
-                "Training Data (%)",
-                min = 50,
-                max = 90,
-                value = 70,
-                step = 5
-              ),
-              sliderInput(
-                "test_percentage",
-                "Testing Data (%)",
-                min = 10,
-                max = 50,
-                value = 30,
-                step = 5
-              )
-            ),
-            conditionalPanel(
-              condition = "input.split_method == 'Cross-validation'",
-              numericInput(
-                "k_folds",
-                "Number of Folds (k):",
-                value = 5,
-                min = 2,
-                step = 1
-              )
+            actionButton(inputId = "submit_target", label = "Submit"),
+            uiOutput("disable_target_ui")
+          ),
+          # Second box: Visualization
+          box(
+            title = "Target Variable Visualization",
+            status = "info",
+            width = 6,
+            tabsetPanel(
+              tabPanel("Histogram", plotOutput("histogram_plot")),
+              tabPanel("Pie Chart", uiOutput("pie_chart_ui"))
             )
           ),
           box(
-            title = "Model Selection", status = "primary", solidHeader = TRUE, width = 12,
-            selectInput(
-              "model_choice",
-              "Select Model:",
-              choices = NULL,
-              selected = NULL
-            )
-          ),
-          box(
-            title = "Model Parameters", status = "primary", solidHeader = TRUE, width = 12,
-            conditionalPanel(
-              condition = "input.model_choice == 'SVM'",
-              numericInput("svm_C", "Parameter C:", value = 0.01, min = 0.001, step = 0.001),
-              selectInput("svm_kernel", "Kernel Type:", choices = c("linear", "polynomial", "rbf"), selected = "linear")
+            title = "Handle Class Imbalance",
+            status = "warning",
+            width = 3,
+            radioButtons(
+              inputId = "imbalance_method",
+              label = "Choose an option to handle class imbalance:",
+              choices = c("None", "Undersampling", "Oversampling"),
+              selected = "None"
             ),
-            conditionalPanel(
-              condition = "input.model_choice == 'Random Forest'",
-              numericInput("rf_trees", "Number of Trees:", value = 100, min = 1, step = 1)
-            ),
-            conditionalPanel(
-              condition = "input.model_choice == 'Logistic Regression'",
-              checkboxInput("log_reg_penalty", "Include Penalty (Regularization)?", value = TRUE),
-              selectInput(
-                "log_reg_penalty_type",
-                "Penalty Type:",
-                choices = c("L1 (Lasso)", "L2 (Ridge)"),
-                selected = "L2 (Ridge)"
-              ),
-              conditionalPanel(
-                condition = "input.log_reg_penalty == true",
-                numericInput("log_reg_penalty_value", "Penalty Strength (λ):", value = 0.01, min = 0.001, step = 0.001)
-              )
-            ),
-            conditionalPanel(
-              condition = "input.model_choice == 'Linear Regression'",
-              checkboxInput("lin_reg_include_intercept", "Include Intercept?", value = TRUE)
-            ),
-            conditionalPanel(
-              condition = "input.model_choice == 'Decision Tree'",
-              numericInput("dt_max_depth", "Maximum Depth:", value = 5, min = 1, step = 1),
-              selectInput(
-                "dt_criterion",
-                "Split Criterion:",
-                choices = c("gini", "entropy"),
-                selected = "gini"
-              )
-            )
-          ),
-          box(
-            title = "Train and Save Model", status = "primary", solidHeader = TRUE, width = 12,
-            actionButton("train_model", "Train Model", class = "btn-primary"),
-            uiOutput("save_model_ui") # Cet élément sera rendu dynamiquement après l'entraînement
+            actionButton(inputId = "apply_imbalance", label = "Apply")
           )
-        )
+        ),
       ),
       
-        tabItem(
-          tabName = "results",
-          fluidRow(
-            box(
-              title = "Model Metrics", status = "primary", solidHeader = TRUE, width = 4,
-              tableOutput("model_metrics")
-            ),
-            box(
-              title = "Confusion Matrix", status = "primary", solidHeader = TRUE, width = 4,
-              plotOutput("conf_matrix_plot")
-            ),
-            box(
-              title = "ROC Curve", status = "primary", solidHeader = TRUE, width = 4,
-              plotOutput("roc_curve"),
-              h4("AUC Score:"),
-              textOutput("auc_score")
-            )
+      tabItem(
+        tabName = "results",
+        fluidRow(
+          box(
+            title = "Model Metrics", status = "primary", solidHeader = TRUE, width = 4,
+            tableOutput("model_metrics")
+          ),
+          box(
+            title = "Confusion Matrix", status = "primary", solidHeader = TRUE, width = 4,
+            plotOutput("conf_matrix_plot")
+          ),
+          box(
+            title = "ROC Curve", status = "primary", solidHeader = TRUE, width = 4,
+            plotOutput("roc_curve"),
+            h4("AUC Score:"),
+            textOutput("auc_score")
           )
         )
-        
+      )
+      
       
     )
   )
