@@ -4,6 +4,7 @@ library(bslib)
 library(readxl)  
 library(DT)
 library(plotly)
+library(ROSE)
 
 server <- function(input, output, session) {
   
@@ -13,7 +14,7 @@ server <- function(input, output, session) {
   
   training_data <- reactiveVal(NULL)
   display_data <- reactiveVal(NULL)
-  # y <- reactiveVal(NULL)
+  y <- reactiveVal(NULL)
   
   # Main observer for file input
   observeEvent(input$fileInput, {
@@ -620,6 +621,79 @@ server <- function(input, output, session) {
   
   ### ML MODELS
   
+  ## Target variable 
+  
+  # Observe the uploaded data and update the choices in target_variable
+  observe({
+    req(display_data())  # Ensure the data is loaded
+    col_names <- colnames(display_data())  # Get column names from display_data
+    updateSelectInput(session, "target_variable", choices = col_names)
+  })
+  
+  # Observe the validate button and process the selected target variable
+  observeEvent(input$validate_target, {
+    req(input$target_variable)  # Ensure the target variable is selected
+    req(training_data())  # Ensure training data is available
+    
+    data <- training_data()
+    target_var <- input$target_variable
+    
+    # Drop the target variable from the training data
+    if (target_var %in% colnames(data)) {
+      Y <- data[[target_var]]  # Extract the target variable
+      data[[target_var]] <- NULL  # Remove the target variable
+      training_data(data)  # Update the reactive variable
+    }
+    print(Y)
+    y(Y)
+    
+    # Provide feedback
+    showNotification("Target variable successfully selected and removed from training data.", type = "message")
+    
+    # Disable the select input to prevent further changes
+    shinyjs::disable("target_variable")
+    shinyjs::disable("validate_target")
+  })
+  
+  ## Resampling the target variable 
+  
+  # Render histogram for the target variable if it is categorical
+  output$target_histogram <- renderPlot({
+    req(input$target_variable)  # Ensure the target variable is selected
+    req(y())  # Ensure the target variable is saved in Y
+    
+    target_data <- y()
+    
+    # Check if the target variable is categorical
+    if (is.factor(target_data) || is.character(target_data)) {
+      barplot(table(target_data), main = "Target Variable Distribution", col = "skyblue", 
+              xlab = "Categories", ylab = "Frequency")
+    } else {
+      return(NULL)  # Do not render if the target variable is not categorical
+    }
+  })
+  
+  observeEvent(input$apply_resampling, {
+    req(y()) 
+    req(training_data())
+    
+    data <- training_data()
+    target_data <- y()
+    data$Target <- target_data
+    
+    if (input$resampling_technique == "undersampling") {
+      balanced_data <- ovun.sample(Target ~ ., data = data, method = "under")$data
+    } else if (input$resampling_technique == "oversampling") {
+      balanced_data <- ovun.sample(Target ~ ., data = data, method = "over")$data
+    }
+    
+    balanced_target <- balanced_data$Target
+    balanced_data$Target <- NULL
+    training_data(balanced_data)
+    y(balanced_target)
+    
+    showNotification(paste("Resampling applied using", input$resampling_technique, "."), type = "message")
+  })
+  
   
 }
-  

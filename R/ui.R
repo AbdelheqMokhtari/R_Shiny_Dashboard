@@ -245,40 +245,35 @@ ui <- dashboardPage(
       tabItem(
         tabName = "ml_models",
         fluidRow(
-          # First box: Target variable selection
+          useShinyjs(),
           box(
             title = "Select Target Variable",
+            status = "success",
+            solidHeader = TRUE,
+            width = 4,
+            selectInput("target_variable", "Select the Target Variable", choices = NULL),
+            actionButton("validate_target", "Validate Target Variable")
+          ),
+          
+          # Box for displaying histogram of the target variable
+          box(
+            title = "Target Variable Histogram",
             status = "primary",
-            width = 3,
-            selectInput(
-              inputId = "target_var",
-              label = "Choose Target Variable:",
-              choices = NULL
-            ),
-            actionButton(inputId = "submit_target", label = "Submit"),
-            uiOutput("disable_target_ui")
+            solidHeader = TRUE,
+            width = 4,
+            plotOutput("target_histogram")  # Render histogram dynamically
           ),
-          # Second box: Visualization
+          
+          # Box for selecting resampling technique
           box(
-            title = "Target Variable Visualization",
-            status = "info",
-            width = 6,
-            tabsetPanel(
-              tabPanel("Histogram", plotOutput("histogram_plot")),
-              tabPanel("Pie Chart", uiOutput("pie_chart_ui"))
-            )
-          ),
-          box(
-            title = "Handle Class Imbalance",
+            title = "Handle Imbalanced Data",
             status = "warning",
-            width = 3,
-            radioButtons(
-              inputId = "imbalance_method",
-              label = "Choose an option to handle class imbalance:",
-              choices = c("None", "Undersampling", "Oversampling"),
-              selected = "None"
-            ),
-            actionButton(inputId = "apply_imbalance", label = "Apply")
+            solidHeader = TRUE,
+            width = 4,
+            selectInput("resampling_technique", "Choose Resampling Technique", 
+                        choices = c("undersampling", "oversampling"), 
+                        selected = "oversampling"),
+            actionButton("apply_resampling", "Apply Resampling")
           )
         ),
       ),
