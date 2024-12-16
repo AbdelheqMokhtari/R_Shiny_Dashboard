@@ -5,7 +5,7 @@ library(readxl)
 library(DT)
 library(plotly)
 library(ROSE)
-
+library(e1071)
 server <- function(input, output, session) {
   
   ## Loading Data
@@ -694,6 +694,291 @@ server <- function(input, output, session) {
     
     showNotification(paste("Resampling applied using", input$resampling_technique, "."), type = "message")
   })
+  
+  
+  observeEvent(input$train_percentage, {
+    updateSliderInput(
+      session,
+      "test_percentage",
+      value = 100 - input$train_percentage
+    )
+  })
+  
+  observeEvent(input$test_percentage, {
+    updateSliderInput(
+      session,
+      "train_percentage",
+      value = 100 - input$test_percentage
+    )
+  })
+  
+  
+  observeEvent(input$split_data, {
+    req(training_data(), y())  # Ensure data and target variable are available
+    
+    # Fetch the data and target variable
+    data <- training_data()
+    target <- y()
+    
+    if (input$split_method == "Holdout") {
+      # Holdout Method
+      train_percentage <- input$train_percentage / 100
+      test_percentage <- input$test_percentage / 100
+      
+      if (abs(train_percentage + test_percentage - 1) > 0.01) {
+        showNotification("Training and Testing percentages must add up to 100%.", type = "error")
+        return()
+      }
+      
+      # Generate indices for splitting
+      set.seed(123)  # Ensure reproducibility
+      train_indices <- sample(1:nrow(data), size = floor(train_percentage * nrow(data)))
+      
+      # Split data
+      train_data <- data[train_indices, , drop = FALSE]
+      test_data <- data[-train_indices, , drop = FALSE]
+      train_target <- target[train_indices]
+      test_target <- target[-train_indices]
+      
+      # Store the splits in reactive variables
+      training_data(train_data)
+      y(train_target)
+      
+      # Save test data and target to separate reactive variables
+      reactive_test_data <<- test_data
+      reactive_test_target <<- test_target
+      
+      # Display split summary
+      output$split_message <- renderText({
+        paste(
+          "Holdout split completed successfully.\n",
+          "Training Data: ", nrow(train_data), " rows\n",
+          "Testing Data: ", nrow(test_data), " rows\n"
+        )
+      })
+      
+      showNotification("Data successfully split using Holdout method.", type = "message")
+      
+    } else if (input$split_method == "Cross-validation") {
+      # Cross-validation Method
+      k <- input$k_folds
+      if (k < 2) {
+        showNotification("Number of folds must be at least 2.", type = "error")
+        return()
+      }
+      
+      # Create folds
+      set.seed(123)  # Ensure reproducibility
+      folds <- caret::createFolds(target, k = k, list = TRUE, returnTrain = TRUE)
+      
+      # Store folds for use in training later
+      reactive_folds <<- folds
+      
+      # Display folds summary
+      output$split_message <- renderText({
+        paste(
+          "Cross-validation setup completed.\n",
+          "Number of folds: ", k, "\n"
+        )
+      })
+      
+      showNotification(paste("Data successfully prepared for", k, "fold cross-validation."), type = "message")
+    }
+  })
+  
+  
+  
+  
+  observeEvent(input$validate_target, {
+    req(y())  # Ensure the target variable is available
+    
+    target <- y()
+    if (is.factor(target) || is.character(target)) {
+      # Categorical target variable
+      updateSelectInput(session, "model_choice", 
+                        choices = c("SVM", "Logistic Regression", "Decision Tree", "Random Forest"),
+                        selected = "SVM")
+    } else if (is.numeric(target)) {
+      # Continuous target variable
+      updateSelectInput(session, "model_choice", 
+                        choices = c("Linear Regression", "Decision Tree", "Random Forest"),
+                        selected = "Linear Regression")
+    }
+  })
+  
+  
+  
+  observe({
+    req(y())  # Ensure the target variable is available
+    
+    # Check if the target variable is ordinal, categorical, or numeric continuous
+    unique_values <- length(unique(y()))
+    is_ordinal <- is.numeric(y()) && unique_values <= 10  # Treat as ordinal if numeric with few unique values
+    is_categorical <- is.factor(y()) || is.character(y()) || is.ordered(y())
+    is_continuous <- is.numeric(y()) && unique_values > 10  # Treat as continuous if numeric with many unique values
+    
+    # Update model selection options
+    if (is_categorical || is_ordinal) {
+      # Categorical or ordinal numeric
+      updateSelectInput(session, "model_choice", 
+                        choices = c("SVM", "Random Forest"), 
+                        selected = "SVM")
+    } else if (is_continuous) {
+      # Continuous numeric
+      updateSelectInput(session, "model_choice", 
+                        choices = c("Linear Regression", "Decision Tree"), 
+                        selected = "Linear Regression")
+    } else {
+      showNotification("Unsupported target variable type. Please check your data.", type = "error")
+    }
+  })
+  reactive_metrics <- reactiveValues(data = NULL)
+  
+  observeEvent(input$train_model, {
+    req(training_data(), y(), input$model_choice)  
+    
+    data <- training_data()
+    target <- y()
+    model <- NULL  # Initialize model variable
+    
+    # Train the model based on the selected model choice
+    if (input$model_choice == "SVM") {
+      req(input$svm_C, input$svm_kernel)
+      
+      # Train SVM model
+      model <- e1071::svm(
+        x = data,
+        y = target,
+        cost = input$svm_C,
+        kernel = input$svm_kernel
+      )
+      
+      output$model_message <- renderText("SVM model trained successfully!")
+      
+    } else if (input$model_choice == "Random Forest") {
+      req(input$rf_trees)
+      
+      # Train Random Forest model
+      model <- randomForest::randomForest(
+        x = data,
+        y = target,
+        ntree = input$rf_trees
+      )
+      
+      output$model_message <- renderText("Random Forest model trained successfully!")
+      
+    } else if (input$model_choice == "Linear Regression") {
+      req(input$lin_reg_include_intercept)
+      
+      # Train Linear Regression model
+      formula <- as.formula(paste("target ~ ."))
+      model <- lm(formula, data = data.frame(data, target = target))
+      
+      output$model_message <- renderText("Linear Regression model trained successfully!")
+      
+    } else if (input$model_choice == "Decision Tree") {
+      req(input$dt_max_depth, input$dt_criterion)
+      
+      # Train Decision Tree model
+      model <- rpart::rpart(
+        formula = as.formula(paste("target ~ .")),
+        data = data.frame(data, target = target),
+        method = ifelse(is.numeric(target), "anova", "class"),
+        control = rpart::rpart.control(maxdepth = input$dt_max_depth),
+        parms = list(split = input$dt_criterion)
+      )
+      
+      output$model_message <- renderText("Decision Tree model trained successfully!")
+      
+    } else {
+      output$model_message <- renderText("Invalid model choice. Please select a valid model.")
+      return()
+    }
+    
+    # Save trained model to a reactive value
+    reactive_model <<- model
+    
+    # Enable save button
+    output$save_model_ui <- renderUI({
+      downloadButton("save_model", "Save Model")
+    })
+  })
+  
+  # Logic to save the trained model
+  output$save_model <- downloadHandler(
+    filename = function() {
+      paste0(input$model_choice, "_model.rds")
+    },
+    content = function(file) {
+      saveRDS(reactive_model, file)
+    }
+  ) 
+  
+  
+  
+  observeEvent(input$show_results, {
+    req(reactive_model, training_data(), y())  # Ensure model, training data, and target are available
+    
+    data <- training_data()
+    target <- y()
+    predictions <- NULL
+    
+    # Generate predictions based on the model
+    if (inherits(reactive_model, "svm")) {
+      predictions <- predict(reactive_model, newdata = data)
+    } else if (inherits(reactive_model, "randomForest")) {
+      predictions <- predict(reactive_model, newdata = data)
+    } else if (inherits(reactive_model, "lm")) {
+      predictions <- predict(reactive_model, newdata = data.frame(data))
+      predictions <- ifelse(predictions > 0.5, 1, 0)  # Convert to binary for classification
+    } else if (inherits(reactive_model, "rpart")) {
+      predictions <- predict(reactive_model, newdata = data.frame(data), type = "class")
+    }
+    
+    # Ensure predictions are valid
+    req(predictions)
+    
+    # Align levels between predictions and target
+    common_levels <- union(levels(factor(predictions)), levels(factor(target)))
+    predictions <- factor(predictions, levels = common_levels)
+    target <- factor(target, levels = common_levels)
+    
+    # Compute confusion matrix
+    confusion_matrix <- caret::confusionMatrix(predictions, target)
+    
+    # Extract metrics
+    accuracy <- confusion_matrix$overall["Accuracy"]
+    precision <- confusion_matrix$byClass["Precision"]
+    recall <- confusion_matrix$byClass["Recall"]
+    f1_score <- 2 * ((precision * recall) / (precision + recall))
+    
+    # Handle cases where Precision, Recall, or F1 Score are NA
+    precision[is.na(precision)] <- 0
+    recall[is.na(recall)] <- 0
+    f1_score[is.na(f1_score)] <- 0
+    
+    # Store metrics in reactive values
+    reactive_metrics$data <- data.frame(
+      Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+      Value = c(accuracy, precision, recall, f1_score)
+    )
+    
+    # Generate confusion matrix plot
+    reactive_conf_matrix$plot <- ggplot2::ggplot(as.data.frame(confusion_matrix$table), ggplot2::aes(x = Prediction, y = Reference)) +
+      ggplot2::geom_tile(ggplot2::aes(fill = Freq), color = "white") +
+      ggplot2::scale_fill_gradient(low = "white", high = "blue") +
+      ggplot2::labs(title = "Confusion Matrix", x = "Predicted", y = "Actual")
+  })
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
   
   
 }
