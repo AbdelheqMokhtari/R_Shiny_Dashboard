@@ -712,6 +712,13 @@ server <- function(input, output, session) {
     )
   })
   
+  splits <- reactiveValues(
+    train_data = NULL,
+    train_target = NULL,
+    test_data = NULL,
+    test_target = NULL,
+    folds = NULL
+  )
   
   observeEvent(input$split_data, {
     req(training_data(), y())  # Ensure data and target variable are available
@@ -721,7 +728,6 @@ server <- function(input, output, session) {
     target <- y()
     
     if (input$split_method == "Holdout") {
-      # Holdout Method
       train_percentage <- input$train_percentage / 100
       test_percentage <- input$test_percentage / 100
       
@@ -735,33 +741,26 @@ server <- function(input, output, session) {
       train_indices <- sample(1:nrow(data), size = floor(train_percentage * nrow(data)))
       
       # Split data
-      train_data <- data[train_indices, , drop = FALSE]
-      test_data <- data[-train_indices, , drop = FALSE]
-      train_target <- target[train_indices]
-      test_target <- target[-train_indices]
+      splits$train_data <- data[train_indices, , drop = FALSE]
+      splits$train_target <- target[train_indices]
+      splits$test_data <- data[-train_indices, , drop = FALSE]
+      splits$test_target <- target[-train_indices]
       
-      # Store the splits in reactive variables
-      training_data(train_data)
-      y(train_target)
-      
-      # Save test data and target to separate reactive variables
-      reactive_test_data <<- test_data
-      reactive_test_target <<- test_target
-      
-      # Display split summary
       output$split_message <- renderText({
         paste(
           "Holdout split completed successfully.\n",
-          "Training Data: ", nrow(train_data), " rows\n",
-          "Testing Data: ", nrow(test_data), " rows\n"
+          "Training Data: ", nrow(splits$train_data), " rows\n",
+          "Testing Data: ", nrow(splits$test_data), " rows\n"
         )
       })
       
-      showNotification("Data successfully split using Holdout method.", type = "message")
+      # Notify the user
+      showNotification("Data successfully prepared for Holdout split.", type = "message")
       
     } else if (input$split_method == "Cross-validation") {
-      # Cross-validation Method
+      req(input$k_folds)
       k <- input$k_folds
+      
       if (k < 2) {
         showNotification("Number of folds must be at least 2.", type = "error")
         return()
@@ -769,12 +768,8 @@ server <- function(input, output, session) {
       
       # Create folds
       set.seed(123)  # Ensure reproducibility
-      folds <- caret::createFolds(target, k = k, list = TRUE, returnTrain = TRUE)
+      splits$folds <- caret::createFolds(target, k = k, list = TRUE, returnTrain = TRUE)
       
-      # Store folds for use in training later
-      reactive_folds <<- folds
-      
-      # Display folds summary
       output$split_message <- renderText({
         paste(
           "Cross-validation setup completed.\n",
@@ -782,9 +777,11 @@ server <- function(input, output, session) {
         )
       })
       
+      # Notify the user
       showNotification(paste("Data successfully prepared for", k, "fold cross-validation."), type = "message")
     }
   })
+  
   
   
   
@@ -835,11 +832,26 @@ server <- function(input, output, session) {
   reactive_metrics <- reactiveValues(data = NULL)
   
   observeEvent(input$train_model, {
-    req(training_data(), y(), input$model_choice)  
+    req(splits, input$model_choice)
     
-    data <- training_data()
-    target <- y()
+    data <- NULL
+    target <- NULL
     model <- NULL  # Initialize model variable
+    
+    # Handle Holdout or Cross-validation
+    if (input$split_method == "Holdout") {
+      req(splits$train_data, splits$train_target)  # Ensure Holdout split is ready
+      data <- splits$train_data
+      target <- splits$train_target
+      
+    } else if (input$split_method == "Cross-validation") {
+      req(splits$folds)  # Ensure Cross-validation split is ready
+      
+      # Use the first fold for training as an example
+      fold_indices <- splits$folds[[1]]
+      data <- training_data()[fold_indices, , drop = FALSE]
+      target <- y()[fold_indices]
+    }
     
     # Train the model based on the selected model choice
     if (input$model_choice == "SVM") {
@@ -904,6 +916,7 @@ server <- function(input, output, session) {
     })
   })
   
+  
   # Logic to save the trained model
   output$save_model <- downloadHandler(
     filename = function() {
@@ -914,66 +927,81 @@ server <- function(input, output, session) {
     }
   ) 
   
+  reactive_values <- reactiveValues(conf_matrix = NULL)
   
   
   observeEvent(input$show_results, {
-    req(reactive_model, training_data(), y())  # Ensure model, training data, and target are available
+    req(reactive_model, splits$test_data, splits$test_target)
     
-    data <- training_data()
-    target <- y()
-    predictions <- NULL
+    # Initialize variables
+    predictions <- predict(reactive_model, newdata = splits$test_data)
+    target <- splits$test_target
     
-    # Generate predictions based on the model
-    if (inherits(reactive_model, "svm")) {
-      predictions <- predict(reactive_model, newdata = data)
-    } else if (inherits(reactive_model, "randomForest")) {
-      predictions <- predict(reactive_model, newdata = data)
-    } else if (inherits(reactive_model, "lm")) {
-      predictions <- predict(reactive_model, newdata = data.frame(data))
-      predictions <- ifelse(predictions > 0.5, 1, 0)  # Convert to binary for classification
-    } else if (inherits(reactive_model, "rpart")) {
-      predictions <- predict(reactive_model, newdata = data.frame(data), type = "class")
+    # Metrics container
+    metrics <- list()
+    
+    # Linear Regression and Decision Tree (Regression Metrics)
+    if (inherits(reactive_model, "lm") || inherits(reactive_model, "rpart")) {
+      mse <- mean((predictions - target)^2)
+      rmse <- sqrt(mse)
+      r_squared <- 1 - (sum((predictions - target)^2) / sum((target - mean(target))^2))
+      
+      metrics <- data.frame(
+        Metric = c("MSE", "RMSE", "R-squared"),
+        Value = c(mse, rmse, r_squared)
+      )
     }
     
-    # Ensure predictions are valid
-    req(predictions)
+    # Random Forest and SVM (Classification Metrics)
+    else if (inherits(reactive_model, "randomForest") || inherits(reactive_model, "svm")) {
+      confusion <- table(Predicted = predictions, Actual = target)
+      accuracy <- sum(diag(confusion)) / sum(confusion)
+      precision <- diag(confusion) / rowSums(confusion)
+      recall <- diag(confusion) / colSums(confusion)
+      f1 <- 2 * (precision * recall) / (precision + recall)
+      
+      # Handle NA in F1 due to zero division
+      f1[is.na(f1)] <- 0
+      
+      metrics <- data.frame(
+        Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+        Value = c(
+          accuracy,
+          mean(precision, na.rm = TRUE),
+          mean(recall, na.rm = TRUE),
+          mean(f1, na.rm = TRUE)
+        )
+      )
+    }
     
-    # Align levels between predictions and target
-    common_levels <- union(levels(factor(predictions)), levels(factor(target)))
-    predictions <- factor(predictions, levels = common_levels)
-    target <- factor(target, levels = common_levels)
-    
-    # Compute confusion matrix
-    confusion_matrix <- caret::confusionMatrix(predictions, target)
-    
-    # Extract metrics
-    accuracy <- confusion_matrix$overall["Accuracy"]
-    precision <- confusion_matrix$byClass["Precision"]
-    recall <- confusion_matrix$byClass["Recall"]
-    f1_score <- 2 * ((precision * recall) / (precision + recall))
-    
-    # Handle cases where Precision, Recall, or F1 Score are NA
-    precision[is.na(precision)] <- 0
-    recall[is.na(recall)] <- 0
-    f1_score[is.na(f1_score)] <- 0
-    
-    # Store metrics in reactive values
-    reactive_metrics$data <- data.frame(
-      Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
-      Value = c(accuracy, precision, recall, f1_score)
-    )
-    
-    # Generate confusion matrix plot
-    reactive_conf_matrix$plot <- ggplot2::ggplot(as.data.frame(confusion_matrix$table), ggplot2::aes(x = Prediction, y = Reference)) +
-      ggplot2::geom_tile(ggplot2::aes(fill = Freq), color = "white") +
-      ggplot2::scale_fill_gradient(low = "white", high = "blue") +
-      ggplot2::labs(title = "Confusion Matrix", x = "Predicted", y = "Actual")
+    # Render the metrics in the UI table
+    output$model_metrics <- renderTable({
+      metrics
+    }, rownames = FALSE)
   })
   
   
   
   
   
+  
+  # Button to display confusion matrix plot
+  observeEvent(input$show_conf_matrix, {
+    req(reactive_model, reactive_values$conf_matrix)
+    
+    if (inherits(reactive_model, "randomForest") || inherits(reactive_model, "svm")) {
+      output$conf_matrix_plot <- renderPlot({
+        heatmap(as.matrix(reactive_values$conf_matrix), Rowv = NA, Colv = NA, 
+                col = colorRampPalette(c("white", "blue"))(100), 
+                scale = "none", margins = c(5, 5), xlab = "Actual", ylab = "Predicted")
+      })
+    } else {
+      output$conf_matrix_plot <- renderPlot({
+        plot(1, type = "n", axes = FALSE, xlab = "", ylab = "")
+        text(1, 1, "Confusion matrix is available for classification models only.", cex = 1.2)
+      })
+    }
+  })
 
   
   

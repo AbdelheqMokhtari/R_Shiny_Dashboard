@@ -371,6 +371,7 @@ ui <- dashboardPage(
           ),
           box(
             title = "Confusion Matrix", status = "primary", solidHeader = TRUE, width = 4,
+            actionButton("show_conf_matrix", "Show Confusion"), 
             plotOutput("conf_matrix_plot")  # Plot to display confusion matrix
           ),
           box(
