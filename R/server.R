@@ -533,14 +533,19 @@ server <- function(input, output, session) {
   ## EDA 
   
   # Mise à jour des choix pour les variables
+  # Update variable selection choices
   observe({
     req(display_data())
     data <- display_data()
+    # Update univariate analysis selection
     updateSelectInput(session, "x_variable", choices = names(data))
+    # Update bivariate analysis selections
+    updateSelectInput(session, "x_variable_bi", choices = names(data))
     updateSelectInput(session, "y_variable", choices = names(data))
   })
   
-  # Histogramme
+  # Unidimensional Analysis
+  # Histogram
   output$histogram <- renderPlotly({
     req(display_data(), input$x_variable)
     data <- display_data()
@@ -555,7 +560,7 @@ server <- function(input, output, session) {
     plot_ly(data, y = ~get(input$x_variable), type = "box")
   })
   
-  # Analyse univariée
+  # Univariate analysis summary
   output$univariate_analysis <- renderPrint({
     req(display_data(), input$x_variable)
     data <- display_data()
@@ -563,41 +568,169 @@ server <- function(input, output, session) {
   })
   
   # Pie Chart
-  output$pie_chart <- renderPlot({
+  # Reactive check if the selected variable is categorical
+  is_categorical <- reactive({
     req(display_data(), input$x_variable)
     data <- display_data()
     variable <- data[[input$x_variable]]
-    if (is.factor(variable) || is.character(variable)) {
-      pie(table(variable), main = "Pie Chart", col = rainbow(length(unique(variable))))
+    
+    # Treat as categorical if it's a factor, character, or numeric with few unique values
+    is.factor(variable) || is.character(variable) || 
+      (is.numeric(variable) && length(unique(variable)) <= 10)
+  })
+  
+  # Send the result of the categorical check to the UI
+  output$is_categorical <- reactive({
+    is_categorical()
+  })
+  # Required for conditionalPanel
+  outputOptions(output, "is_categorical", suspendWhenHidden = FALSE)
+  
+  # Render the Pie Chart only for categorical variables
+  output$pie_chart <- renderPlot({
+    req(display_data(), is_categorical())
+    data <- display_data()
+    variable <- data[[input$x_variable]]
+    
+    # Convert numeric categorical variables to factors for better pie chart display
+    if (is.numeric(variable)) {
+      variable <- as.factor(variable)
+    }
+    
+    pie(table(variable), main = "Pie Chart", col = rainbow(length(unique(variable))))
+  })
+  
+  
+  
+  # Bidimensional Analysis
+  
+  
+  
+  # Correlation plot
+  output$bivariate_analysis <- renderPlotly({
+    req(display_data(), input$x_variable_bi, input$y_variable)
+    data <- display_data()
+    plot_ly(data, x = ~get(input$x_variable_bi), y = ~get(input$y_variable), type = "scatter", mode = "markers")
+  })
+  # correlation coefficient 
+  # Reactive check if both variables are numeric
+  is_both_numeric <- reactive({
+    req(display_data(), input$x_variable_bi, input$y_variable)
+    data <- display_data()
+    is.numeric(data[[input$x_variable_bi]]) && is.numeric(data[[input$y_variable]])
+  })
+  
+  # Send the result of numeric check to the UI
+  output$show_correlation <- reactive({
+    is_both_numeric()
+  })
+  outputOptions(output, "show_correlation", suspendWhenHidden = FALSE)
+  
+  # Render correlation plot with regression line
+  output$bivariate_analysis <- renderPlotly({
+    req(display_data(), input$x_variable_bi, input$y_variable)
+    data <- display_data()
+    
+    x <- data[[input$x_variable_bi]]
+    y <- data[[input$y_variable]]
+    
+    # If both variables are numeric, add regression line
+    if (is_both_numeric()) {
+      ggplotly(
+        ggplot(data, aes(x = x, y = y)) +
+          geom_point(color = "blue", alpha = 0.6) +
+          geom_smooth(method = "lm", color = "red", se = FALSE) +
+          labs(
+            title = "Correlation Plot with Regression Line",
+            x = input$x_variable_bi,
+            y = input$y_variable
+          ) +
+          theme_minimal()
+      )
     } else {
-      showNotification("Pie Chart is only available for categorical variables.", type = "error")
+      # Default scatter plot for non-numeric combinations
+      plot_ly(data, x = ~x, y = ~y, type = "scatter", mode = "markers")
     }
   })
   
-  # Analyse bidimensionnelle : Correlation plot
-  output$bivariate_analysis <- renderPlotly({
-    req(display_data(), input$x_variable, input$y_variable)
+  # Calculate and display the correlation coefficient
+  output$correlation_coefficient <- renderText({
+    req(is_both_numeric())
     data <- display_data()
-    plot_ly(data, x = ~get(input$x_variable), y = ~get(input$y_variable), type = "scatter", mode = "markers")
-  })
-  
-  # Quantitative vs qualitative : Boxplots
-  output$quant_vs_qual_table <- renderTable({
-    req(input$var_x, input$var_y, processed_data())
-    processed_data() %>%
-      group_by(!!sym(input$var_x)) %>%
-      summarise(
-        Moyenne = mean(!!sym(input$var_y), na.rm = TRUE),
-        Ecart_type = sd(!!sym(input$var_y), na.rm = TRUE)
-      )
-  })
-  
-  output$boxplot_parallel <- renderPlot({
-    req(display_data(), input$x_variable, input$y_variable)
+    x <- data[[input$x_variable_bi]]
+    y <- data[[input$y_variable]]
     
+    corr <- cor(x, y, use = "complete.obs")
+    paste("Correlation Coefficient (r):", round(corr, 3))
+  })
+  
+  
+  # Correlation matrix
+  output$correlation_matrix_plot <- renderPlot({
+    req(display_data())
+    numeric_data <- display_data()[, sapply(display_data(), is.numeric)]
+    corr <- cor(numeric_data, use = "complete.obs")
+    corrplot::corrplot(corr, method = "color", type = "upper")
+  })
+  
+  #calculate the coefficient between quantitative and qualitative 
+  # Reactive check if X is qualitative and Y is quantitative
+  is_qualitative_quantitative <- reactive({
+    req(display_data(), input$x_variable_bi, input$y_variable)
     data <- display_data()
-    x <- data[[input$x_variable]]  # Variable catégorielle
-    y <- data[[input$y_variable]]  # Variable numérique
+    (is.factor(data[[input$x_variable_bi]]) || is.character(data[[input$x_variable_bi]])) &&
+      is.numeric(data[[input$y_variable]])
+  })
+  
+  # Send the result of the qualitative/quantitative check to the UI
+  output$show_correlation_ratio <- reactive({
+    is_qualitative_quantitative()
+  })
+  outputOptions(output, "show_correlation_ratio", suspendWhenHidden = FALSE)
+  
+  # Calculate and render the correlation ratio c_{Y|X}
+  output$correlation_ratio <- renderText({
+    req(is_qualitative_quantitative())
+    data <- display_data()
+    x <- data[[input$x_variable_bi]]
+    y <- data[[input$y_variable]]
+    
+    # Compute the overall mean of Y
+    y_bar <- mean(y, na.rm = TRUE)
+    
+    # Compute the total variance of Y
+    s2_y <- mean((y - y_bar)^2, na.rm = TRUE)
+    
+    # Group data by levels of X
+    grouped_data <- split(y, x)
+    
+    # Compute explained variance (s2_E) and residual variance (s2_R)
+    s2_E <- sum(sapply(grouped_data, function(group) {
+      n_l <- length(group)
+      y_bar_l <- mean(group, na.rm = TRUE)
+      n_l * (y_bar_l - y_bar)^2
+    })) / length(y)
+    
+    s2_R <- sum(sapply(grouped_data, function(group) {
+      n_l <- length(group)
+      var_l <- var(group, na.rm = TRUE)
+      n_l * var_l
+    })) / length(y)
+    
+    # Correlation ratio
+    c_y_given_x <- sqrt(s2_E / s2_y)
+    
+    paste("Correlation Ratio (c_Y|X):", round(c_y_given_x, 3))
+  })
+  
+  
+  
+  # Boxplot (parallel)
+  output$boxplot_parallel <- renderPlot({
+    req(display_data(), input$x_variable_bi, input$y_variable)
+    data <- display_data()
+    x <- data[[input$x_variable_bi]]
+    y <- data[[input$y_variable]]
     
     validate(
       need(is.numeric(y), "Y Variable must be numeric."),
@@ -607,17 +740,84 @@ server <- function(input, output, session) {
     ggplot(data, aes(x = as.factor(x), y = y)) +
       geom_boxplot(fill = "orange", alpha = 0.7) +
       theme_minimal() +
-      labs(title = "Parallel Boxplots", x = input$x_variable, y = input$y_variable)
+      labs(title = "Parallel Boxplots", x = input$x_variable_bi, y = input$y_variable)
+  })
+  
+  # Bar Plot (Column Profiles)
+  output$bar_plot_profiles <- renderPlot({
+    req(display_data(), input$x_variable_bi, input$y_variable)
+    data <- display_data()
+    x <- data[[input$x_variable_bi]]
+    y <- data[[input$y_variable]]
+    
+    validate(
+      need(is.factor(x) || is.character(x), "X Variable must be categorical."),
+      need(is.factor(y) || is.character(y), "Y Variable must be categorical.")
+    )
+    
+    contingency_table <- table(x, y)
+    col_profiles <- prop.table(contingency_table, margin = 2)
+    col_profiles_df <- as.data.frame(as.table(col_profiles))
+    colnames(col_profiles_df) <- c("X", "Y", "Proportion")
+    
+    ggplot(col_profiles_df, aes(x = X, y = Proportion, fill = Y)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      theme_minimal() +
+      labs(
+        title = "Diagramme en barres des profils-colonnes",
+        x = input$x_variable_bi,
+        y = "Proportion",
+        fill = input$y_variable
+      ) +
+      scale_y_continuous(labels = scales::percent)
+  })
+  
+  ## contingency table and cramer coefficent 
+  # Reactive check if both variables are qualitative (including label-encoded)
+  is_qualitative_qualitative <- reactive({
+    req(display_data(), input$x_variable_bi, input$y_variable)
+    data <- display_data()
+    
+    is_qualitative <- function(var) {
+      is.factor(var) || is.character(var) || (is.numeric(var) && length(unique(var)) <= 10)
+    }
+    
+    is_qualitative(data[[input$x_variable_bi]]) && is_qualitative(data[[input$y_variable]])
+  })
+  
+  # Contingency table
+  output$contingency_table <- renderTable({
+    req(is_qualitative_qualitative())
+    data <- display_data()
+    x <- data[[input$x_variable_bi]]
+    y <- data[[input$y_variable]]
+    
+    table(x, y)
+  }, rownames = TRUE)
+  
+  # Cramér's V calculation
+  output$cramers_v <- renderText({
+    req(is_qualitative_qualitative())
+    data <- display_data()
+    x <- data[[input$x_variable_bi]]
+    y <- data[[input$y_variable]]
+    
+    # Create contingency table
+    contingency_table <- table(x, y)
+    
+    # Compute Cramér's V
+    chi2_stat <- chisq.test(contingency_table, correct = FALSE)$statistic  # Chi-squared statistic
+    n <- sum(contingency_table)  # Total number of observations
+    min_dim <- min(nrow(contingency_table), ncol(contingency_table)) - 1  # Min(rows, cols) - 1
+    
+    cramers_v <- sqrt(as.numeric(chi2_stat) / (n * min_dim))  # Cramér's V formula
+    
+    paste("Cramér's V:", round(cramers_v, 3))
   })
   
   
-  # Correlation Matrix
-  output$correlation_matrix_plot <- renderPlot({
-    req(display_data())
-    numeric_data <- display_data()[, sapply(display_data(), is.numeric)]
-    corr <- cor(numeric_data, use = "complete.obs")
-    corrplot::corrplot(corr, method = "color", type = "upper")
-  })
+  
+  
   
   ### ML MODELS
   
@@ -721,9 +921,8 @@ server <- function(input, output, session) {
   )
   
   observeEvent(input$split_data, {
-    req(training_data(), y())  # Ensure data and target variable are available
+    req(training_data(), y())
     
-    # Fetch the data and target variable
     data <- training_data()
     target <- y()
     
@@ -736,25 +935,32 @@ server <- function(input, output, session) {
         return()
       }
       
-      # Generate indices for splitting
-      set.seed(123)  # Ensure reproducibility
+      set.seed(123)
       train_indices <- sample(1:nrow(data), size = floor(train_percentage * nrow(data)))
       
-      # Split data
       splits$train_data <- data[train_indices, , drop = FALSE]
       splits$train_target <- target[train_indices]
       splits$test_data <- data[-train_indices, , drop = FALSE]
       splits$test_target <- target[-train_indices]
       
+      # Post-Split Analysis
+      output$split_summary <- renderPrint({
+        list(
+          Train_Distribution = table(splits$train_target),
+          Test_Distribution = table(splits$test_target)
+        )
+      })
+      
       output$split_message <- renderText({
         paste(
           "Holdout split completed successfully.\n",
           "Training Data: ", nrow(splits$train_data), " rows\n",
-          "Testing Data: ", nrow(splits$test_data), " rows\n"
+          "Training Target: ", length(splits$train_target), " rows\n",
+          "Testing Data: ", nrow(splits$test_data), " rows\n",
+          "Testing Target: ", length(splits$test_target), " rows\n"
         )
       })
       
-      # Notify the user
       showNotification("Data successfully prepared for Holdout split.", type = "message")
       
     } else if (input$split_method == "Cross-validation") {
@@ -766,8 +972,7 @@ server <- function(input, output, session) {
         return()
       }
       
-      # Create folds
-      set.seed(123)  # Ensure reproducibility
+      set.seed(123)
       splits$folds <- caret::createFolds(target, k = k, list = TRUE, returnTrain = TRUE)
       
       output$split_message <- renderText({
@@ -777,7 +982,6 @@ server <- function(input, output, session) {
         )
       })
       
-      # Notify the user
       showNotification(paste("Data successfully prepared for", k, "fold cross-validation."), type = "message")
     }
   })
@@ -935,73 +1139,153 @@ server <- function(input, output, session) {
     
     # Initialize variables
     predictions <- predict(reactive_model, newdata = splits$test_data)
-    target <- splits$test_target
+    # Ensure the target is a factor (if it's not already)
+    target <- factor(splits$test_target)
     
-    # Metrics container
-    metrics <- list()
+    # Extract unique values in the target variable and store them in levels
+    levels <- unique(target)
     
-    # Linear Regression and Decision Tree (Regression Metrics)
-    if (inherits(reactive_model, "lm") || inherits(reactive_model, "rpart")) {
+    # Print the unique values (categories) of the target variable
+    print("Unique values (categories) of the target variable:")
+    print(levels)
+    
+    # Print dimensions of predictions and target to console
+    print(paste("Dimensions of predictions:", length(predictions)))
+    print(paste("Dimensions of target:", length(target)))
+    
+    # Check if predictions are NULL or empty
+    if (is.null(predictions) || length(predictions) == 0) {
+      stop("Predictions are NULL or empty!")
+    }
+    
+    # Check if the model is SVM or Random Forest (classification models)
+    if (inherits(reactive_model, "svm") || inherits(reactive_model, "randomForest")) {
+      
+      # Convert categorical target to ordinal numeric values (assumption: target is ordinal)
+      unique_categories <- unique(target)  # Extract unique categories
+      category_mapping <- setNames(1:length(unique_categories), unique_categories)  # Map categories to ordinal values
+      
+      # Convert target to numeric ordinal values for consistency
+      target_numeric <- category_mapping[as.character(target)]
+      
+      # If the predictions are continuous (e.g., probabilities), convert them to class labels
+      if (is.numeric(predictions)) {
+        # For multi-class classification, map continuous predictions to the nearest ordinal category
+        predictions <- round(predictions)  # Round predictions to the nearest integer
+        
+        # Ensure predictions are within valid range
+        predictions <- pmin(pmax(predictions, 1), length(unique_categories))  # Clip predictions to valid category range
+        predictions <- factor(predictions, levels = 1:length(unique_categories))  # Convert to factor
+        predictions <- unique_categories[as.integer(predictions)]  # Map to actual category names
+      }
+      
+      # Ensure predictions are factors with the same levels as target
+      predictions <- factor(predictions, levels = levels(target))
+      
+      # Handle missing predictions correctly
+      if (any(is.na(predictions))) {
+        # Replace NAs with a valid default class (ensure the default class is in the factor levels)
+        predictions[is.na(predictions)] <- levels(target)[1]  # Use the first level of target as default
+      }
+      
+      # Print after handling NAs
+      print("Predictions after handling NAs:")
+      print(head(predictions))  # Print first few predictions after handling NAs
+      
+      # Classification Metrics Calculation
+      confusion <- table(Predicted = predictions, Actual = target)
+      print("Confusion Matrix:")
+      print(confusion)  # Print the confusion matrix
+      
+      if (sum(confusion) > 0) {
+        # If confusion matrix is not empty, calculate metrics
+        accuracy <- sum(diag(confusion)) / sum(confusion)
+        precision <- diag(confusion) / ifelse(rowSums(confusion) == 0, 1, rowSums(confusion))
+        recall <- diag(confusion) / ifelse(colSums(confusion) == 0, 1, colSums(confusion))
+        f1 <- 2 * (precision * recall) / ifelse((precision + recall) == 0, 1, (precision + recall))
+        
+        # Collect the classification metrics
+        metrics <- data.frame(
+          Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+          Value = c(
+            accuracy,
+            mean(precision, na.rm = TRUE),
+            mean(recall, na.rm = TRUE),
+            mean(f1, na.rm = TRUE)
+          )
+        )
+        
+        # Render classification metrics
+        output$model_metrics <- renderTable({
+          metrics
+        }, rownames = FALSE)
+        
+        # Plot ROC curve and display AUC
+        output$roc_curve <- renderPlot({
+          library(pROC)  # Ensure pROC package is available
+          
+          # Convert target to numeric for pROC compatibility
+          numeric_target <- as.numeric(target) - 1  # Convert levels to 0 and 1
+          
+          # Check if predictions are probabilities or factors
+          if (is.numeric(predictions)) {
+            prob_predictions <- predictions
+          } else {
+            prob_predictions <- as.numeric(as.character(predictions)) - 1
+          }
+          
+          # Compute ROC curve and AUC
+          roc_obj <- roc(numeric_target, prob_predictions)
+          auc_score <- auc(roc_obj)
+          
+          # Plot ROC curve
+          plot(roc_obj, col = "blue", lwd = 2, main = "ROC Curve")
+          legend("bottomright", legend = paste("AUC =", round(auc_score, 3)), bty = "n", cex = 1.2)
+        })
+        
+        # Button to display confusion matrix plot
+        output$conf_matrix_plot <- renderPlot({
+          heatmap(as.matrix(confusion), Rowv = NA, Colv = NA,
+                  col = colorRampPalette(c("white", "blue"))(100),
+                  scale = "none", margins = c(5, 5), xlab = "Actual", ylab = "Predicted")
+        })
+      } else {
+        # If confusion matrix is empty, print a message
+        output$model_metrics <- renderTable({
+          data.frame(Metric = "Error", Value = "Confusion Matrix is empty")
+        })
+      }
+      
+    } else if (inherits(reactive_model, "rpart") || inherits(reactive_model, "lm")) {
+      # If the model is Decision Tree or Linear Regression (regression)
+      
+      print("Sample of predictions:")
+      print(head(predictions))  # Print first few predictions
+      print("Sample of target:")
+      print(head(target))  # Print first few actual target values
+      
+      # Calculate regression metrics
       mse <- mean((predictions - target)^2)
       rmse <- sqrt(mse)
       r_squared <- 1 - (sum((predictions - target)^2) / sum((target - mean(target))^2))
       
+      # Metrics container for regression
       metrics <- data.frame(
         Metric = c("MSE", "RMSE", "R-squared"),
         Value = c(mse, rmse, r_squared)
       )
-    }
-    
-    # Random Forest and SVM (Classification Metrics)
-    else if (inherits(reactive_model, "randomForest") || inherits(reactive_model, "svm")) {
-      confusion <- table(Predicted = predictions, Actual = target)
-      accuracy <- sum(diag(confusion)) / sum(confusion)
-      precision <- diag(confusion) / rowSums(confusion)
-      recall <- diag(confusion) / colSums(confusion)
-      f1 <- 2 * (precision * recall) / (precision + recall)
       
-      # Handle NA in F1 due to zero division
-      f1[is.na(f1)] <- 0
-      
-      metrics <- data.frame(
-        Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
-        Value = c(
-          accuracy,
-          mean(precision, na.rm = TRUE),
-          mean(recall, na.rm = TRUE),
-          mean(f1, na.rm = TRUE)
-        )
-      )
+      # Render regression metrics
+      output$model_metrics <- renderTable({
+        metrics
+      }, rownames = FALSE)
     }
-    
-    # Render the metrics in the UI table
-    output$model_metrics <- renderTable({
-      metrics
-    }, rownames = FALSE)
   })
   
   
   
   
-  
-  
-  # Button to display confusion matrix plot
-  observeEvent(input$show_conf_matrix, {
-    req(reactive_model, reactive_values$conf_matrix)
-    
-    if (inherits(reactive_model, "randomForest") || inherits(reactive_model, "svm")) {
-      output$conf_matrix_plot <- renderPlot({
-        heatmap(as.matrix(reactive_values$conf_matrix), Rowv = NA, Colv = NA, 
-                col = colorRampPalette(c("white", "blue"))(100), 
-                scale = "none", margins = c(5, 5), xlab = "Actual", ylab = "Predicted")
-      })
-    } else {
-      output$conf_matrix_plot <- renderPlot({
-        plot(1, type = "n", axes = FALSE, xlab = "", ylab = "")
-        text(1, 1, "Confusion matrix is available for classification models only.", cex = 1.2)
-      })
-    }
-  })
+}
 
   
   
@@ -1009,4 +1293,3 @@ server <- function(input, output, session) {
   
   
   
-}

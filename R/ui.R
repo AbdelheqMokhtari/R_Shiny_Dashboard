@@ -106,7 +106,7 @@ ui <- dashboardPage(
             uiOutput("drag_drop_ui"),
             actionButton("apply_switch", "Apply Switch")
           )
-        ),
+        )
       ),
       
       
@@ -210,34 +210,73 @@ ui <- dashboardPage(
       
       tabItem(
         tabName = "analyse_data",
+        
+        # First row: Variable selection
         fluidRow(
-          # Sélection des variables
+          # Box for single variable selection
           box(
-            title = "Variable Selection", status = "primary", solidHeader = TRUE, width = 2,
-            h3("Variable Selection"),
-            selectInput("x_variable", "X Variable:", choices = NULL),
-            selectInput("y_variable", "Y Variable:", choices = NULL)
+            title = "Univariate Analysis Variable Selection", status = "primary", solidHeader = TRUE, width = 6,
+            selectInput("x_variable", "Variable:", choices = NULL)
           ),
-          # Statistiques descriptives unidimensionnelles
+          # Box for two-variable selection
           box(
-            title = "Statistiques descriptives unidimensionnelle", status = "primary", solidHeader = TRUE,
+            title = "Bivariate Analysis Variable Selection", status = "primary", solidHeader = TRUE, width = 6,
+            selectInput("x_variable_bi", "X Variable:", choices = NULL),
+            selectInput("y_variable", "Y Variable:", choices = NULL)
+          )
+        ),
+        
+        # Second row: Unidimensional and Bidimensional analysis
+        fluidRow(
+          # Unidimensional analysis box
+          box(
+            title = "Unidimensional Analysis", status = "primary", solidHeader = TRUE, width = 6,
             tabsetPanel(
-              tabPanel("Histogramme", numericInput("binwidth_input", "Binwidth:", value = 0.2, min = 0.01, step = 0.01), plotlyOutput("histogram")),
+              tabPanel(
+                "Histogramme", 
+                numericInput("binwidth_input", "Binwidth:", value = 0.2, min = 0.01, step = 0.01),
+                plotlyOutput("histogram")
+              ),
               tabPanel("Box Plot", plotlyOutput("boxplot")),
               tabPanel("Extra", verbatimTextOutput("univariate_analysis")),
-              tabPanel("Pie Chart", plotOutput("pie_chart", height = 500, width = 600))
-            ),
-            width = 5
+              # Add a Pie Chart tab, dynamically controlled
+              tabPanel(
+                "Pie Chart",
+                conditionalPanel(
+                  condition = "output.is_categorical === true", # Show only if variable is categorical
+                  plotOutput("pie_chart", height = 500, width = 600)
+                )
+              )
+            )
           ),
-          # Analyse bidimensionnelle
+          # Bidimensional analysis box
           box(
-            title = "Analyse bidimensionnelle", status = "primary", solidHeader = TRUE,
+            title = "Bidimensional Analysis", status = "primary", solidHeader = TRUE, width = 6,
             tabsetPanel(
-              tabPanel("correlation plot", plotlyOutput("bivariate_analysis")),
+              tabPanel(
+                "Correlation Plot",
+                plotlyOutput("bivariate_analysis"),
+                conditionalPanel(
+                  condition = "output.show_correlation === true",  # Show only for numeric variables
+                  h4(textOutput("correlation_coefficient"), style = "color: red; margin-top: 10px;")
+                )
+              ),
               tabPanel("Correlation Matrix", plotOutput("correlation_matrix_plot")),
-              tabPanel("Box Plot",plotOutput("boxplot_parallel"))
-            ),
-            width = 5
+              tabPanel(
+                "Box Plot",
+                plotOutput("boxplot_parallel"),
+                conditionalPanel(
+                  condition = "output.show_correlation_ratio === true",  # Show only for quantitative vs qualitative
+                  h4(textOutput("correlation_ratio"), style = "color: blue; margin-top: 10px;")
+                )
+              ),
+              tabPanel("Bar Plot (Profils-Colonnes)", plotOutput("bar_plot_profiles")),
+              tabPanel(
+                "Contingency Table & Cramér's V",
+                tableOutput("contingency_table"),
+                h4(textOutput("cramers_v"), style = "color: blue; margin-top: 10px;")
+              )
+            )
           )
         )
       ),
@@ -357,7 +396,7 @@ ui <- dashboardPage(
             actionButton("train_model", "Train Model", class = "btn-primary"),
             uiOutput("save_model_ui") # Cet élément sera rendu dynamiquement après l'entraînement
           ),
-          verbatimTextOutput("model_message"),
+          verbatimTextOutput("model_message")
         )
       ),
        
@@ -371,7 +410,6 @@ ui <- dashboardPage(
           ),
           box(
             title = "Confusion Matrix", status = "primary", solidHeader = TRUE, width = 4,
-            actionButton("show_conf_matrix", "Show Confusion"), 
             plotOutput("conf_matrix_plot")  # Plot to display confusion matrix
           ),
           box(
@@ -383,5 +421,5 @@ ui <- dashboardPage(
         )
       )
 )
-))
-      
+)
+)
