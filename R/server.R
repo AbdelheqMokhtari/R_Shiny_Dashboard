@@ -546,12 +546,62 @@ server <- function(input, output, session) {
   
   # Unidimensional Analysis
   # Histogram
+  # Unidimensional Analysis - Enhanced Histogram or Bar Chart
   output$histogram <- renderPlotly({
     req(display_data(), input$x_variable)
+    
+    # Get the selected data
     data <- display_data()
-    plot_ly(data, x = ~get(input$x_variable), type = "histogram", autobinx = FALSE, 
-            xbins = list(size = input$binwidth_input))
+    variable_data <- data[[input$x_variable]]
+    
+    # Check if the variable is numeric
+    if (is.numeric(variable_data)) {
+      # Calculate the range and determine bin width
+      data_range <- range(variable_data, na.rm = TRUE)
+      bin_width <- (data_range[2] - data_range[1]) / 10  # Divide range into 10 intervals
+      
+      # Plot histogram
+      plot_ly(
+        data, 
+        x = ~get(input$x_variable), 
+        type = "histogram", 
+        autobinx = FALSE, 
+        xbins = list(size = bin_width)  # Use calculated bin width
+      ) %>%
+        layout(
+          title = paste("Histogram of", input$x_variable),
+          xaxis = list(title = input$x_variable),
+          yaxis = list(title = "Count"),
+          bargap = 0.1
+        )
+    } else if (is.factor(variable_data) || is.character(variable_data)) {
+      # For categorical variables, create a bar chart
+      category_counts <- table(variable_data)  # Count occurrences of each category
+      
+      plot_ly(
+        x = names(category_counts), 
+        y = as.numeric(category_counts), 
+        type = "bar"
+      ) %>%
+        layout(
+          title = paste("Bar Chart of", input$x_variable),
+          xaxis = list(title = input$x_variable),
+          yaxis = list(title = "Count"),
+          bargap = 0.3
+        )
+    } else {
+      # Display a message if the variable is not numeric or categorical
+      plot_ly() %>%
+        layout(
+          title = "Cannot generate plot",
+          annotations = list(
+            text = "Selected variable is neither numeric nor categorical.",
+            x = 0.5, y = 0.5, showarrow = FALSE, font = list(size = 16)
+          )
+        )
+    }
   })
+  
   
   # Boxplot
   output$boxplot <- renderPlotly({
@@ -1084,7 +1134,7 @@ server <- function(input, output, session) {
       output$model_message <- renderText("Random Forest model trained successfully!")
       
     } else if (input$model_choice == "Linear Regression") {
-      req(input$lin_reg_include_intercept)
+      
       
       # Train Linear Regression model
       formula <- as.formula(paste("target ~ ."))
@@ -1094,6 +1144,7 @@ server <- function(input, output, session) {
       
     } else if (input$model_choice == "Decision Tree") {
       req(input$dt_max_depth, input$dt_criterion)
+      
       
       # Train Decision Tree model
       model <- rpart::rpart(
@@ -1136,6 +1187,112 @@ server <- function(input, output, session) {
   
   observeEvent(input$show_results, {
     req(reactive_model, splits$test_data, splits$test_target)
+    
+    if (input$split_method == "Cross-validation") {
+      # Handle cross-validation results
+      cv_results <- reactive_model$resample  # Extract resample results from cross-validation
+      
+      
+      print("Cross-validation results:")
+      print(head(cv_results))
+      print(cv_results)  # Print the full cross-validation results
+      
+      if (!is.null(cv_results)) {
+        if (inherits(reactive_model, "rpart") || inherits(reactive_model, "lm")) {
+          # Regression Metrics Aggregation (Decision Tree, Linear Regression)
+          print("Processing regression metrics...")
+          
+          mse <- mean(cv_results$MSE, na.rm = TRUE)  # Average MSE across folds
+          rmse <- mean(cv_results$RMSE, na.rm = TRUE)  # Average RMSE across folds
+          r_squared <- mean(cv_results$R2, na.rm = TRUE)  # Average R-squared across folds
+          
+          print(paste("Average MSE across folds:", mse))
+          print(paste("Average RMSE across folds:", rmse))
+          print(paste("Average R-squared across folds:", r_squared))
+          
+          # Display Regression Metrics
+          metrics <- data.frame(
+            Metric = c("MSE", "RMSE", "R-squared"),
+            Value = c(mse, rmse, r_squared)
+          )
+          
+          output$model_metrics <- renderTable({
+            metrics
+          }, rownames = FALSE)
+          
+        } else if (inherits(reactive_model, "svm") || inherits(reactive_model, "randomForest")) {
+          # Classification Metrics Aggregation (SVM, Random Forest)
+          print("Processing classification metrics...")
+          
+          accuracy <- mean(cv_results$Accuracy, na.rm = TRUE)
+          precision <- mean(cv_results$Precision, na.rm = TRUE)
+          recall <- mean(cv_results$Recall, na.rm = TRUE)
+          f1 <- mean(cv_results$F1, na.rm = TRUE)
+          
+          print(paste("Average Accuracy across folds:", accuracy))
+          print(paste("Average Precision across folds:", precision))
+          print(paste("Average Recall across folds:", recall))
+          print(paste("Average F1 Score across folds:", f1))
+          
+          # Display Classification Metrics
+          metrics <- data.frame(
+            Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+            Value = c(accuracy, precision, recall, f1)
+          )
+          
+          output$model_metrics <- renderTable({
+            metrics
+          }, rownames = FALSE)
+          
+          # Draw Confusion Matrix
+          print("Aggregating confusion matrices...")
+          aggregated_conf_matrix <- Reduce(`+`, cv_results$ConfusionMatrix)  # Aggregate confusion matrices across folds
+          print("Aggregated Confusion Matrix:")
+          print(aggregated_conf_matrix)
+          
+          output$conf_matrix_plot <- renderPlot({
+            heatmap(
+              as.matrix(aggregated_conf_matrix), Rowv = NA, Colv = NA,
+              col = colorRampPalette(c("white", "blue"))(100),
+              scale = "none", margins = c(5, 5), xlab = "Actual", ylab = "Predicted"
+            )
+          })
+          
+          # Draw ROC Curve and AUC Score
+          print("Aggregating probabilities and targets for ROC curve...")
+          all_probabilities <- unlist(cv_results$Probabilities)
+          all_targets <- unlist(cv_results$Actual)
+          
+          print("Sample of all probabilities:")
+          print(head(all_probabilities))
+          print("Sample of all targets:")
+          print(head(all_targets))
+          
+          output$roc_curve <- renderPlot({
+            library(pROC)
+            roc_obj <- roc(all_targets, all_probabilities)
+            auc_score <- auc(roc_obj)
+            
+            print(paste("Computed AUC Score:", auc_score))
+            
+            # Plot ROC Curve
+            plot(roc_obj, col = "blue", lwd = 2, main = "ROC Curve (Cross-validation)")
+            legend("bottomright", legend = paste("AUC =", round(auc_score, 3)), bty = "n", cex = 1.2)
+          })
+        } else {
+          print("Error: Invalid model type for cross-validation")
+          output$model_metrics <- renderTable({
+            data.frame(Metric = "Error", Value = "Invalid model type for cross-validation")
+          })
+        }
+      } else {
+        print("Error: No results from cross-validation")
+        output$model_metrics <- renderTable({
+          data.frame(Metric = "Error", Value = "No results from cross-validation")
+        })
+      }
+    }
+    else{
     
     # Initialize variables
     predictions <- predict(reactive_model, newdata = splits$test_data)
@@ -1257,17 +1414,32 @@ server <- function(input, output, session) {
       }
       
     } else if (inherits(reactive_model, "rpart") || inherits(reactive_model, "lm")) {
-      # If the model is Decision Tree or Linear Regression (regression)
+      # Convert target to numeric if it's a factor
+      if (is.factor(target)) {
+        target <- as.numeric(as.character(target))
+      }
       
+      # Convert predictions to numeric if they're factors (just in case)
+      if (is.factor(predictions)) {
+        predictions <- as.numeric(as.character(predictions))
+      }
+      
+      # Ensure predictions and target are not NULL or empty
+      if (is.null(predictions) || length(predictions) == 0 || is.null(target) || length(target) == 0) {
+        stop("Predictions or target are NULL or empty!")
+      }
+      
+      # Print first few predictions and target for debugging
       print("Sample of predictions:")
-      print(head(predictions))  # Print first few predictions
+      print(head(predictions))
       print("Sample of target:")
-      print(head(target))  # Print first few actual target values
+      print(head(target))
       
       # Calculate regression metrics
-      mse <- mean((predictions - target)^2)
+      mse <- mean((predictions - target)^2, na.rm = TRUE)
       rmse <- sqrt(mse)
-      r_squared <- 1 - (sum((predictions - target)^2) / sum((target - mean(target))^2))
+      r_squared <- 1 - (sum((predictions - target)^2, na.rm = TRUE) / 
+                          sum((target - mean(target, na.rm = TRUE))^2, na.rm = TRUE))
       
       # Metrics container for regression
       metrics <- data.frame(
@@ -1280,6 +1452,8 @@ server <- function(input, output, session) {
         metrics
       }, rownames = FALSE)
     }
+    }
+    
   })
   
   

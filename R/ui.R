@@ -366,20 +366,23 @@ ui <- dashboardPage(
           ),
           box(
             title = "Model Parameters", status = "primary", solidHeader = TRUE, width = 12,
+            # SVM Parameters
             conditionalPanel(
               condition = "input.model_choice == 'SVM'",
               numericInput("svm_C", "Parameter C:", value = 0.01, min = 0.001, step = 0.001),
               selectInput("svm_kernel", "Kernel Type:", choices = c("linear", "polynomial", "rbf"), selected = "linear")
             ),
+            # Random Forest Parameters
             conditionalPanel(
               condition = "input.model_choice == 'Random Forest'",
               numericInput("rf_trees", "Number of Trees:", value = 100, min = 1, step = 1)
             ),
-            
+            # Linear Regression - Empty Placeholder
             conditionalPanel(
               condition = "input.model_choice == 'Linear Regression'",
-              checkboxInput("lin_reg_include_intercept", "Include Intercept?", value = TRUE)
+              tags$p("No parameters to configure for Linear Regression.")
             ),
+            # Decision Tree Parameters
             conditionalPanel(
               condition = "input.model_choice == 'Decision Tree'",
               numericInput("dt_max_depth", "Maximum Depth:", value = 5, min = 1, step = 1),
@@ -391,6 +394,7 @@ ui <- dashboardPage(
               )
             )
           ),
+          
           box(
             title = "Train and Save Model", status = "primary", solidHeader = TRUE, width = 12,
             actionButton("train_model", "Train Model", class = "btn-primary"),
