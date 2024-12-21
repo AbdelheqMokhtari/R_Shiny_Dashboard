@@ -46,7 +46,7 @@ ui <- dashboardPage(
         }
       "))
     ),
-    
+    useShinyjs(),  # Enable shinyjs
     tabItems(
       tabItem(
         tabName = "load_data",
@@ -75,14 +75,14 @@ ui <- dashboardPage(
             width = 12,
             tabsetPanel(
               tabPanel(
-                title = "Show Data", status = "primary", solidHeader = TRUE,
+                title = "Show Data",
                 style = "overflow-x: auto;",
                 DTOutput("table"),
                 width = 9
               ),
               tabPanel(
                 title = "Data Summary",
-                DTOutput("dataSummary")  # Change from verbatimTextOutput
+                DTOutput("dataSummary")
               )
             )
           )
@@ -93,49 +93,62 @@ ui <- dashboardPage(
             status = "danger",
             solidHeader = TRUE,
             width = 12,
-            uiOutput("drop_feature_ui"),  # Use dynamic UI
+            uiOutput("drop_feature_ui"),
             actionButton("apply_drop", "Apply")
           )
         ),
         fluidRow(
+          # Box for Numerical to Categorical Conversion
           box(
-            title = "Drag & Drop: Switch Variable Type",
+            title = "Convert Numerical to Categorical",
+            status = "primary",
+            solidHeader = TRUE,
+            width = 6,
+            selectInput(
+              inputId = "num_to_cat",
+              label = "Select Numerical Variables:",
+              choices = NULL,  # Dynamically populated
+              multiple = TRUE   # Allow multiple selections
+            ),
+            actionButton("apply_num_to_cat", "Convert to Categorical")
+          ),
+          
+          # Box for Categorical to Numerical Conversion
+          box(
+            title = "Convert Categorical to Numerical",
             status = "warning",
             solidHeader = TRUE,
-            width = 12,
-            uiOutput("drag_drop_ui"),
-            actionButton("apply_switch", "Apply Switch")
+            width = 6,
+            selectInput(
+              inputId = "cat_to_num",
+              label = "Select Categorical Variables:",
+              choices = NULL,  # Dynamically populated
+              multiple = TRUE   # Allow multiple selections
+            ),
+            actionButton("apply_cat_to_num", "Convert to Numerical")
           )
         )
       ),
       
-      
       tabItem(
         tabName = "preprocessing",
         fluidRow(
-          # Handling Missing Values Box
           box(
             title = "Handle Missing Values", 
             status = "primary", 
             solidHeader = TRUE, 
             width = 6,
-            # Select variable from dataset
             uiOutput("missing_var_ui"),
-            # Display missing percentage
             textOutput("missing_percent"),
-            # Select method to handle missing values
             uiOutput("missing_method_ui"),
             actionButton("apply_missing", "Apply")
           ),
-          # Handling Outliers Box
           box(
             title = "Handle Outliers", 
             status = "warning", 
             solidHeader = TRUE, 
             width = 6,
-            # Select variable for outlier handling
             uiOutput("outlier_var_ui"),
-            # Select method to handle outliers
             selectInput(
               inputId = "outlier_method", 
               label = "Select Outlier Handling Method:", 
@@ -146,46 +159,54 @@ ui <- dashboardPage(
           )
         ),
         fluidRow(
-          # Data Transformation Box
           box(
             title = "Data Transformation",
             status = "success",
             solidHeader = TRUE,
             width = 6,
-            # Select numerical variables for transformation (no default selection)
             uiOutput("transform_var_ui"),
-            # Transformation method selection
             selectInput(
               inputId = "transformation_method",
               label = "Select Transformation Method:",
               choices = c("Min-Max Scaling", "Z-Score Normalization", "Log Transformation"),
               selected = "Min-Max Scaling"
             ),
-            actionButton("apply_transformation", "Apply")
+            div(
+              style = "display: flex; align-items: center; gap: 10px;",
+              actionButton("apply_transformation", "Apply"),
+              tags$span(
+                "⚠️ Be cautious when applying transformations to the target variable; only Log Transformation allows recovery of original values.",
+                style = "color: orange; font-size: 12px;"
+              )
+            )
           ),
-          # Encoding Data Box
           box(
             title = "Encoding Data",
             status = "info",
             solidHeader = TRUE,
             width = 6,
-            # Select categorical variables for encoding (no default selection)
             uiOutput("encoding_var_ui"),
-            # Encoding method selection
             selectInput(
               inputId = "encoding_method",
               label = "Select Encoding Method:",
               choices = c("Label Encoding", "One-Hot Encoding"),
               selected = "Label Encoding"
             ),
-            actionButton("apply_encoding", "Apply")
+            div(
+              style = "display: flex; align-items: center;",  # Align button and message in the same line
+              actionButton("apply_encoding", "Apply"),
+              tags$span(
+                "❗ Avoid applying One-Hot Encoding to the target variable.",
+                style = "color: red; margin-left: 10px;"  # Add spacing and red color
+              )
+            )
           )
         ),
         fluidRow(
           column(
             width = 12,
             div(
-              style = "text-align: center; margin-top: 20px; margin-bottom: 30px;",  # Added margin-bottom
+              style = "text-align: center; margin-top: 20px; margin-bottom: 30px;",
               actionButton("submit_data", "Submit", 
                            style = "padding: 10px 20px; font-size: 18px; background-color: #007BFF; color: white;"),
               downloadButton("save_data", "Save", 
@@ -193,20 +214,18 @@ ui <- dashboardPage(
                              style = "padding: 10px 20px; font-size: 18px; margin-left: 20px;")
             )
           )
-         
         ),
         fluidRow(
-          # Display Submitted Data Table
           box(
-            title = "Data Table",
-            status = "info",
+            status = "warning",
             solidHeader = TRUE,
             width = 12,
-            dataTableOutput("submitted_table")
+            title = "Training Data",
+            style = "overflow-x: auto;",
+            DTOutput("table_training")
           )
         )
       ),
-      
       
       tabItem(
         tabName = "analyse_data",
@@ -285,35 +304,41 @@ ui <- dashboardPage(
         tabName = "ml_models",
         fluidRow(
           useShinyjs(),
+          # Select Target Variable Box
           box(
             title = "Select Target Variable",
             status = "success",
             solidHeader = TRUE,
-            width = 4,
+            width = 4, 
+            height = "400px", # Fix component height
             selectInput("target_variable", "Select the Target Variable", choices = NULL),
             actionButton("validate_target", "Validate Target Variable")
           ),
           
-          # Box for displaying histogram of the target variable
+          # Target Variable Summary/Histogram Box
           box(
-            title = "Target Variable Histogram",
+            id = "target_histogram_box",
+            title = textOutput("target_box_title"),  # Dynamic title
             status = "primary",
             solidHeader = TRUE,
             width = 4,
-            plotOutput("target_histogram")  # Render histogram dynamically
+            height = "400px", # Fix component height
+            uiOutput("target_summary")  # Dynamic content
           ),
           
-          # Box for selecting resampling technique
+          # Handle Imbalanced Data Box
           box(
+            id = "resampling_box",
             title = "Handle Imbalanced Data",
             status = "warning",
             solidHeader = TRUE,
             width = 4,
-            selectInput("resampling_technique", "Choose Resampling Technique", 
-                        choices = c("undersampling", "oversampling"), 
-                        selected = "oversampling"),
-            actionButton("apply_resampling", "Apply Resampling")
-          ),
+            height = "400px", # Fix component height
+            uiOutput("resampling_ui")
+          )
+        ),
+        
+        fluidRow(
           box(
             title = "Split Data", status = "primary", solidHeader = TRUE, width = 12,
             selectInput(
@@ -354,7 +379,8 @@ ui <- dashboardPage(
             actionButton("split_data", "Split Data", class = "btn-primary"),
             verbatimTextOutput("split_message")  # Display split information
           ),
-          
+        ),
+        fluidRow(
           box(
             title = "Model Selection", status = "primary", solidHeader = TRUE, width = 12,
             selectInput(
@@ -364,25 +390,24 @@ ui <- dashboardPage(
               selected = NULL
             )
           ),
+        ),
+        fluidRow(
           box(
             title = "Model Parameters", status = "primary", solidHeader = TRUE, width = 12,
-            # SVM Parameters
             conditionalPanel(
               condition = "input.model_choice == 'SVM'",
               numericInput("svm_C", "Parameter C:", value = 0.01, min = 0.001, step = 0.001),
               selectInput("svm_kernel", "Kernel Type:", choices = c("linear", "polynomial", "rbf"), selected = "linear")
             ),
-            # Random Forest Parameters
             conditionalPanel(
               condition = "input.model_choice == 'Random Forest'",
               numericInput("rf_trees", "Number of Trees:", value = 100, min = 1, step = 1)
             ),
-            # Linear Regression - Empty Placeholder
+            
             conditionalPanel(
               condition = "input.model_choice == 'Linear Regression'",
-              tags$p("No parameters to configure for Linear Regression.")
+              checkboxInput("lin_reg_include_intercept", "Include Intercept?", value = TRUE)
             ),
-            # Decision Tree Parameters
             conditionalPanel(
               condition = "input.model_choice == 'Decision Tree'",
               numericInput("dt_max_depth", "Maximum Depth:", value = 5, min = 1, step = 1),
@@ -392,29 +417,36 @@ ui <- dashboardPage(
                 choices = c("gini", "entropy"),
                 selected = "gini"
               )
+              
             )
-          ),
-          
+          )
+        ),
+        fluidRow(
           box(
             title = "Train and Save Model", status = "primary", solidHeader = TRUE, width = 12,
             actionButton("train_model", "Train Model", class = "btn-primary"),
             uiOutput("save_model_ui") # Cet élément sera rendu dynamiquement après l'entraînement
           ),
-          verbatimTextOutput("model_message")
+          verbatimTextOutput("model_message"),
         )
       ),
-       
       tabItem(
         tabName = "results",
         fluidRow(
-          # First row of boxes
           box(
-            title = "Model Metrics", status = "primary", solidHeader = TRUE, width = 4,
+            title = "Model Metrics",
+            status = "primary",
+            solidHeader = TRUE,
+            width = 4,
             actionButton("show_results", "Show Results"),  # Button to trigger results
             tableOutput("model_metrics")  # Table to display metrics
           ),
           box(
-            title = "Confusion Matrix", status = "primary", solidHeader = TRUE, width = 4,
+            title = "Confusion Matrix",
+            status = "primary",
+            solidHeader = TRUE,
+            width = 4,
+            actionButton("show_conf_matrix", "Show Confusion"), 
             plotOutput("conf_matrix_plot")  # Plot to display confusion matrix
           ),
           box(
@@ -423,16 +455,8 @@ ui <- dashboardPage(
             h4("AUC Score:"),
             textOutput("auc_score")
           )
-        ),
-        # New fluidRow with box for graph
-        fluidRow(
-          box(
-            title = "Feature Importance", status = "primary", solidHeader = TRUE, width = 12,
-            plotOutput("feature_importance_plot")  # Graph to display feature importance
-          )
         )
       )
-      
-)
-)
+    )
+  )
 )

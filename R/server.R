@@ -5,7 +5,9 @@ library(readxl)
 library(DT)
 library(plotly)
 library(ROSE)
-library(e1071)
+library(caret)
+library(smotefamily)
+
 server <- function(input, output, session) {
   
   ## Loading Data
@@ -15,6 +17,8 @@ server <- function(input, output, session) {
   training_data <- reactiveVal(NULL)
   display_data <- reactiveVal(NULL)
   y <- reactiveVal(NULL)
+  y_display <- reactiveVal(NULL)
+  save_variable <- reactiveVal(NULL)
   
   # Main observer for file input
   observeEvent(input$fileInput, {
@@ -163,86 +167,117 @@ server <- function(input, output, session) {
     )
   })
   
+  ## Switch Categorical and Numerical data
   
-  ## Switch Categorical and Numerical data (Drag & Drop)
-  output$drag_drop_ui <- renderUI({
-    req(display_data())
-    data <- display_data()
-    
-    numeric_vars <- names(data)[sapply(data, is.numeric)]
-    categorical_vars <- names(data)[sapply(data, function(x) is.factor(x) || is.character(x))]
-    
-    tagList(
-      fluidRow(
-        column(
-          width = 6,
-          h4("Numerical Variables"),
-          jqui_sortable(
-            tags$ul(
-              lapply(numeric_vars, function(x) tags$li(class = "list-group-item", x)),
-              class = "list-group",
-              id = "numeric_vars"
-            ),
-            options = list(connectWith = "#categorical_vars") # Allow dragging between lists
-          )
-        ),
-        column(
-          width = 6,
-          h4("Categorical Variables"),
-          jqui_sortable(
-            tags$ul(
-              lapply(categorical_vars, function(x) tags$li(class = "list-group-item", x)),
-              class = "list-group",
-              id = "categorical_vars"
-            ),
-            options = list(connectWith = "#numeric_vars") # Allow dragging between lists
-          )
-        )
-      )
-    )
-  })
+  # Dynamically update dropdown options
+  observe({
+    current_data <- display_data()
   
-  # Apply the changes when "Apply Switch" is clicked
-  observeEvent(input$apply_switch, {
-    req(input$numeric_vars, input$categorical_vars)
-    
-    # Extract the updated variables from the sortable lists
-    updated_numeric_vars <- input$numeric_vars
-    updated_categorical_vars <- input$categorical_vars
-    
-    # Get the current display_data
-    data <- display_data()
-    
-    # Update the data types based on the new classifications
-    for (col in updated_numeric_vars) {
-      if (!is.numeric(data[[col]])) {
-        data[[col]] <- as.numeric(data[[col]])
-      }
-    }
-    
-    for (col in updated_categorical_vars) {
-      if (!is.factor(data[[col]]) && !is.character(data[[col]])) {
-        data[[col]] <- as.factor(data[[col]])
-      }
-    }
-    
-    # Save the updated data in training_data and display_data
-    training_data(data)
-    display_data(data)
-    
-    # Debugging: Print the updated variables to the console
-    print("Updated Numerical Variables:")
-    print(updated_numeric_vars)
-    
-    print("Updated Categorical Variables:")
-    print(updated_categorical_vars)
+    numerical_vars <- names(current_data)[sapply(current_data, is.numeric)]
+    categorical_vars <- names(current_data)[sapply(current_data, function(x) is.factor(x) || is.character(x))]
+  
+    updateSelectInput(session, "num_to_cat", choices = numerical_vars, selected = NULL)
+    updateSelectInput(session, "cat_to_num", choices = categorical_vars, selected = NULL)
   })
 
+  # Convert Numerical to Categorical
+  observeEvent(input$apply_num_to_cat, {
+    req(input$num_to_cat)  # Ensure input is not empty
+    
+    current_training_data <- training_data()
+    current_display_data <- display_data()
+    
+    for (var in input$num_to_cat) {
+      if (!is.factor(current_training_data[[var]])) {
+        # Save the original values in an attribute for potential reconversion
+        attr(current_training_data[[var]], "original_values") <- current_training_data[[var]]
+        attr(current_display_data[[var]], "original_values") <- current_display_data[[var]]
+      }
+      current_training_data[[var]] <- as.factor(current_training_data[[var]])
+      current_display_data[[var]] <- as.factor(current_display_data[[var]])
+    }
+    
+    # Update datasets
+    training_data(current_training_data)
+    display_data(current_display_data)
+    
+    # Show confirmation dialog
+    showModal(modalDialog(
+      title = "Conversion Completed",
+      paste("The following numerical variables have been converted to categorical:",
+            paste(input$num_to_cat, collapse = ", ")),
+      easyClose = TRUE,
+      footer = modalButton("OK")
+    ))
+  })
+
+  # Convert Categorical to Numerical
+  observeEvent(input$apply_cat_to_num, {
+    req(input$cat_to_num)  # Ensure input is not empty
+    
+    current_training_data <- training_data()
+    current_display_data <- display_data()
+    
+    successfully_converted <- c()
+    failed_conversions <- c()
+    
+    for (var in input$cat_to_num) {
+      # Check if the variable has original numerical values stored as an attribute
+      original_values <- attr(current_training_data[[var]], "original_values")
+      if (!is.null(original_values)) {
+        # Restore the original numerical values
+        current_training_data[[var]] <- original_values
+        current_display_data[[var]] <- original_values
+        successfully_converted <- c(successfully_converted, var)
+      } else {
+        # Handle missing values and check if non-missing values are numeric
+        non_missing_values <- as.character(current_training_data[[var]][!is.na(current_training_data[[var]])])
+        if (all(grepl("^[0-9.-]+$", non_missing_values))) {
+          # Convert to numeric, preserving NA
+          current_training_data[[var]] <- as.numeric(as.character(current_training_data[[var]]))
+          current_display_data[[var]] <- as.numeric(as.character(current_display_data[[var]]))
+          successfully_converted <- c(successfully_converted, var)
+        } else {
+          # Add to the failed list if conversion isn't possible
+          failed_conversions <- c(failed_conversions, var)
+        }
+      }
+    }
+    
+    # Update datasets if any conversion happened
+    if (length(successfully_converted) > 0) {
+      training_data(current_training_data)
+      display_data(current_display_data)
+    }
+    
+    # Show success dialog for converted variables
+    if (length(successfully_converted) > 0) {
+      showModal(modalDialog(
+        title = "Conversion Completed",
+        paste("The following categorical variables have been converted to numerical:",
+              paste(successfully_converted, collapse = ", ")),
+        easyClose = TRUE,
+        footer = modalButton("OK")
+      ))
+    }
+    
+    # Show error dialog for failed conversions
+    if (length(failed_conversions) > 0) {
+      showModal(modalDialog(
+        title = "Conversion Error",
+        paste("The following variables contain non-numeric values (excluding missing values) and could not be converted to numerical:",
+              paste(failed_conversions, collapse = ", ")),
+        easyClose = TRUE,
+        footer = modalButton("OK")
+      ))
+    }
+  })
+  
+  ### Pre Processing
+  
+  
   ## Handling Missing values
   
-  # Render the missing percentage for the selected variable.
-  # Calculates the proportion of missing values in the selected variable 
-  # from the displayed dataset (display_data) and displays it as a percentage.
   output$missing_percent <- renderText({
     req(input$missing_var, display_data())  # Ensure variable selection and data availability
     var <- display_data()[[input$missing_var]]  # Extract the selected variable's column
@@ -430,29 +465,54 @@ server <- function(input, output, session) {
     )
   })
   
-  # Applying transformation logic 
   observeEvent(input$apply_transformation, {
     req(training_data())
     req(input$transform_var)
     req(input$transformation_method)
     
+    # Get the training data and selected variables
     data <- training_data()
     selected_vars <- input$transform_var
+    transformed_vars <- list()
     
     for (var in selected_vars) {
       if (input$transformation_method == "Min-Max Scaling") {
         data[[var]] <- (data[[var]] - min(data[[var]], na.rm = TRUE)) / 
           (max(data[[var]], na.rm = TRUE) - min(data[[var]], na.rm = TRUE))
+        transformed_vars[[var]] <- "Min-Max Scaling"
       } else if (input$transformation_method == "Z-Score Normalization") {
         data[[var]] <- scale(data[[var]], center = TRUE, scale = TRUE)
+        transformed_vars[[var]] <- "Z-Score Normalization"
       } else if (input$transformation_method == "Log Transformation") {
         data[[var]] <- log(data[[var]] + 1) # Adding 1 to handle zero values
+        transformed_vars[[var]] <- "Log Transformation"
       }
     }
     
-    training_data(data) # Update the dataset
+    # Update the dataset with the transformations
+    training_data(data) 
+    
+    # Show notification
     showNotification("Transformation applied successfully!", type = "message")
-    showNotification("PS: The results won't appear in Show data section!", type = "warning")
+    
+    # Prepare the transformation message
+    if (length(transformed_vars) == 1) {
+      var_list <- paste(names(transformed_vars), collapse = ", ")
+      transformation_msg <- paste(input$transformation_method, "applied in the following variable:", var_list)
+    } else {
+      var_list <- paste(names(transformed_vars), collapse = ", ")
+      transformation_msg <- paste(input$transformation_method, "applied in the following variables:", var_list)
+    }
+    
+    # Show modal dialog with applied transformations
+    showModal(
+      modalDialog(
+        title = "Transformation Applied",
+        transformation_msg,
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      )
+    )
   })
   
   ## Data Encoding 
@@ -478,45 +538,164 @@ server <- function(input, output, session) {
   observeEvent(input$apply_encoding, {
     req(training_data())
     req(input$encoding_var)
-    req(input$encoding_method) # Dropdown for encoding method
-    
+    req(input$encoding_method)
+  
+    # Get the training data and selected variables
     data <- training_data()
     selected_vars <- input$encoding_var
-    
-    # Apply encoding for each selected variable
+    encoded_vars <- list()
+  
     for (var in selected_vars) {
       if (input$encoding_method == "Label Encoding") {
-        # Label Encoding: Replace the variable with integer codes
         data[[var]] <- as.integer(as.factor(data[[var]]))
+        encoded_vars[[var]] <- "Label Encoding"
       } else if (input$encoding_method == "One-Hot Encoding") {
-        # One-Hot Encoding: Use model.matrix and add new columns
         one_hot <- model.matrix(~ . - 1, data.frame(data[[var]]))
         colnames(one_hot) <- paste(var, colnames(one_hot), sep = "_")
         data <- cbind(data, one_hot)
-        # Drop the original column after encoding
         data[[var]] <- NULL
+        encoded_vars[[var]] <- "One-Hot Encoding"
       }
     }
-    
-    # Update the dataset
+  
+    # Update the dataset with the encoding applied
     training_data(data)
+  
+    # Show notification
     showNotification("Encoding applied successfully!", type = "message")
+  
+    # Prepare the encoding message
+    if (length(encoded_vars) == 1) {
+      var_list <- paste(names(encoded_vars), collapse = ", ")
+      encoding_msg <- paste(encoded_vars[[1]], "applied in the following variable:", var_list)
+    } else {
+      var_list <- paste(names(encoded_vars), collapse = ", ")
+      encoding_msg <- paste(encoded_vars[[1]], "applied in the following variables:", var_list)
+    }
+  
+    # Show modal dialog with encoded variables
+    showModal(
+      modalDialog(
+        title = "Encoding Applied",
+        encoding_msg,
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      )
+    )
   })
+
+  ## Submit button 
   
-  
-  ## Saving and submitting data 
-  
-  # Show submitted data table on Submit button click
   observeEvent(input$submit_data, {
-    output$submitted_table <- renderDataTable({
-      req(training_data())  # Ensure data exists before rendering
-      training_data()
-    })
+    # Retrieve the current state of training_data and display_data
+    req(training_data(), display_data())  # Ensure both datasets are available
+    training <- training_data()
+    display <- display_data()
+    
+    # Initialize messages for dialog box
+    alert_messages <- c()  # For alerts
+    warning_message <- "⚠️ Once you submit, further preprocessing will be locked and cannot be changed."
+    
+    # Check for categorical variables in training_data
+    if (any(sapply(training, function(col) is.factor(col) || is.character(col)))) {
+      alert_messages <- c(
+        alert_messages, 
+        "❗ The training data contains categorical variables. Label encoding will be automatically applied to these variables before training."
+      )
+    }
+    
+    # Check if the features in training_data differ from those in display_data
+    if (ncol(training) != ncol(display)) {
+      alert_messages <- c(
+        alert_messages,
+        "❗ The interface cannot handle a target variable that has been one-hot encoded. Please ensure the target variable is not encoded in this way."
+      )
+    }
+    
+    # Check for missing values in training_data
+    if (any(is.na(training))) {
+      alert_messages <- c(
+        alert_messages,
+        "❗ The training data contains missing values. If you don't handle them, all rows with null values will be removed automatically before training."
+      )
+    }
+    
+    # Prepare dialog box content
+    dialog_content <- tagList(
+      tags$h4("Alerts:", style = "color: red;"),  # Header for alert messages
+      lapply(alert_messages, function(msg) tags$p(msg)),
+      tags$hr(),
+      tags$h4("Warning:", style = "color: orange;"),  # Header for the warning message
+      tags$p(warning_message)
+    )
+    
+    # Show modal dialog with confirm and cancel options
+    showModal(
+      modalDialog(
+        title = "Submission Confirmation",
+        dialog_content,
+        easyClose = FALSE,  # Prevent closing without user action
+        footer = tagList(
+          actionButton("confirm_submit", "Confirm", icon = icon("check-circle")),
+          modalButton("Cancel", icon = icon("times-circle"))
+        )
+      )
+    )
   })
+  
+  
+  # Handle Confirm and Cancel actions
+  observeEvent(input$confirm_submit, {
+    # Disable all preprocessing components
+    shinyjs::disable("missing_values_section")
+    shinyjs::disable("outliers_section")
+    shinyjs::disable("transformation_section")
+    shinyjs::disable("encoding_section")
+    shinyjs::disable("submit_button")
+    
+    # Proceed to finalize the submission
+    complete_submission()
+    
+    # Close the modal dialog
+    removeModal()
+  })
+  
+  observeEvent(input$cancel, {
+    # Close the modal dialog without taking further action
+    removeModal()
+  })
+  
+  
+  # Observe Confirm button click
+  observeEvent(input$confirm_submit, {
+    # Proceed with submission
+    complete_submission()
+  })
+  
+  # Define a function to handle submission
+  complete_submission <- function() {
+    # Disable all components
+    shinyjs::disable("missing_var")
+    shinyjs::disable("missing_method")
+    shinyjs::disable("apply_missing")
+    shinyjs::disable("outlier_var")
+    shinyjs::disable("outlier_method")
+    shinyjs::disable("apply_outliers")
+    shinyjs::disable("transform_var")
+    shinyjs::disable("transformation_method")
+    shinyjs::disable("apply_transformation")
+    shinyjs::disable("encoding_var")
+    shinyjs::disable("encoding_method")
+    shinyjs::disable("apply_encoding")
+    shinyjs::disable("submit_data")
+    save_variable("confirmed")
+  }
+  
+  ## Save Button 
   
   # Enable the Save button only when Submit is clicked
   observe({
-    toggleState("save_data", !is.null(training_data()))
+    toggleState("save_data", !is.null(save_variable()))
   })
   
   # Save data as CSV on Save button click
@@ -529,8 +708,15 @@ server <- function(input, output, session) {
       write.csv(training_data(), file, row.names = FALSE)
     }
   )
+  ## Show training data 
   
-  ## EDA 
+  # Render the training Dataset
+  output$table_training <- renderDT({
+    req(display_data())  # Ensure data is available
+    datatable(training_data(), options = list(scrollX = TRUE))
+  })
+  
+  ### EDA 
   
   # Mise à jour des choix pour les variables
   # Update variable selection choices
@@ -546,62 +732,12 @@ server <- function(input, output, session) {
   
   # Unidimensional Analysis
   # Histogram
-  # Unidimensional Analysis - Enhanced Histogram or Bar Chart
   output$histogram <- renderPlotly({
     req(display_data(), input$x_variable)
-    
-    # Get the selected data
     data <- display_data()
-    variable_data <- data[[input$x_variable]]
-    
-    # Check if the variable is numeric
-    if (is.numeric(variable_data)) {
-      # Calculate the range and determine bin width
-      data_range <- range(variable_data, na.rm = TRUE)
-      bin_width <- (data_range[2] - data_range[1]) / 10  # Divide range into 10 intervals
-      
-      # Plot histogram
-      plot_ly(
-        data, 
-        x = ~get(input$x_variable), 
-        type = "histogram", 
-        autobinx = FALSE, 
-        xbins = list(size = bin_width)  # Use calculated bin width
-      ) %>%
-        layout(
-          title = paste("Histogram of", input$x_variable),
-          xaxis = list(title = input$x_variable),
-          yaxis = list(title = "Count"),
-          bargap = 0.1
-        )
-    } else if (is.factor(variable_data) || is.character(variable_data)) {
-      # For categorical variables, create a bar chart
-      category_counts <- table(variable_data)  # Count occurrences of each category
-      
-      plot_ly(
-        x = names(category_counts), 
-        y = as.numeric(category_counts), 
-        type = "bar"
-      ) %>%
-        layout(
-          title = paste("Bar Chart of", input$x_variable),
-          xaxis = list(title = input$x_variable),
-          yaxis = list(title = "Count"),
-          bargap = 0.3
-        )
-    } else {
-      # Display a message if the variable is not numeric or categorical
-      plot_ly() %>%
-        layout(
-          title = "Cannot generate plot",
-          annotations = list(
-            text = "Selected variable is neither numeric nor categorical.",
-            x = 0.5, y = 0.5, showarrow = FALSE, font = list(size = 16)
-          )
-        )
-    }
+    plot_ly(data, x = ~get(input$x_variable), type = "histogram", autobinx = FALSE, 
+            xbins = list(size = input$binwidth_input))
   })
-  
   
   # Boxplot
   output$boxplot <- renderPlotly({
@@ -662,7 +798,7 @@ server <- function(input, output, session) {
     data <- display_data()
     plot_ly(data, x = ~get(input$x_variable_bi), y = ~get(input$y_variable), type = "scatter", mode = "markers")
   })
-  
+  # correlation coefficient 
   # Reactive check if both variables are numeric
   is_both_numeric <- reactive({
     req(display_data(), input$x_variable_bi, input$y_variable)
@@ -714,6 +850,7 @@ server <- function(input, output, session) {
     paste("Correlation Coefficient (r):", round(corr, 3))
   })
   
+  
   # Correlation matrix
   output$correlation_matrix_plot <- renderPlot({
     req(display_data())
@@ -722,13 +859,12 @@ server <- function(input, output, session) {
     corrplot::corrplot(corr, method = "color", type = "upper")
   })
   
+  #calculate the coefficient between quantitative and qualitative 
   # Reactive check if X is qualitative and Y is quantitative
   is_qualitative_quantitative <- reactive({
     req(display_data(), input$x_variable_bi, input$y_variable)
     data <- display_data()
-    (is.factor(data[[input$x_variable_bi]]) || 
-        is.character(data[[input$x_variable_bi]]) ||
-        (is.numeric(data[[input$x_variable_bi]]) && length(unique(data[[input$x_variable_bi]])) <= 10)) &&
+    (is.factor(data[[input$x_variable_bi]]) || is.character(data[[input$x_variable_bi]])) &&
       is.numeric(data[[input$y_variable]])
   })
   
@@ -745,17 +881,29 @@ server <- function(input, output, session) {
     x <- data[[input$x_variable_bi]]
     y <- data[[input$y_variable]]
     
+    # Compute the overall mean of Y
     y_bar <- mean(y, na.rm = TRUE)
+    
+    # Compute the total variance of Y
     s2_y <- mean((y - y_bar)^2, na.rm = TRUE)
     
+    # Group data by levels of X
     grouped_data <- split(y, x)
     
+    # Compute explained variance (s2_E) and residual variance (s2_R)
     s2_E <- sum(sapply(grouped_data, function(group) {
       n_l <- length(group)
       y_bar_l <- mean(group, na.rm = TRUE)
       n_l * (y_bar_l - y_bar)^2
     })) / length(y)
     
+    s2_R <- sum(sapply(grouped_data, function(group) {
+      n_l <- length(group)
+      var_l <- var(group, na.rm = TRUE)
+      n_l * var_l
+    })) / length(y)
+    
+    # Correlation ratio
     c_y_given_x <- sqrt(s2_E / s2_y)
     
     paste("Correlation Ratio (c_Y|X):", round(c_y_given_x, 3))
@@ -770,9 +918,7 @@ server <- function(input, output, session) {
     
     validate(
       need(is.numeric(y), "Y Variable must be numeric."),
-      need(is.factor(x) || is.character(x) || 
-             (is.numeric(x) && length(unique(x)) <= 10), 
-           "X Variable must be categorical.")
+      need(is.factor(x) || is.character(x), "X Variable must be categorical.")
     )
     
     ggplot(data, aes(x = as.factor(x), y = y)) +
@@ -789,12 +935,8 @@ server <- function(input, output, session) {
     y <- data[[input$y_variable]]
     
     validate(
-      need(is.factor(x) || is.character(x) || 
-             (is.numeric(x) && length(unique(x)) <= 10), 
-           "X Variable must be categorical."),
-      need(is.factor(y) || is.character(y) || 
-             (is.numeric(y) && length(unique(y)) <= 10), 
-           "Y Variable must be categorical.")
+      need(is.factor(x) || is.character(x), "X Variable must be categorical."),
+      need(is.factor(y) || is.character(y), "Y Variable must be categorical.")
     )
     
     contingency_table <- table(x, y)
@@ -814,15 +956,14 @@ server <- function(input, output, session) {
       scale_y_continuous(labels = scales::percent)
   })
   
-  # Reactive check if both variables are qualitative
+  ## contingency table and cramer coefficent 
+  # Reactive check if both variables are qualitative (including label-encoded)
   is_qualitative_qualitative <- reactive({
     req(display_data(), input$x_variable_bi, input$y_variable)
     data <- display_data()
     
     is_qualitative <- function(var) {
-      is.factor(var) || 
-        is.character(var) || 
-        (is.numeric(var) && length(unique(var)) <= 10)
+      is.factor(var) || is.character(var) || (is.numeric(var) && length(unique(var)) <= 10)
     }
     
     is_qualitative(data[[input$x_variable_bi]]) && is_qualitative(data[[input$y_variable]])
@@ -845,27 +986,27 @@ server <- function(input, output, session) {
     x <- data[[input$x_variable_bi]]
     y <- data[[input$y_variable]]
     
+    # Create contingency table
     contingency_table <- table(x, y)
     
-    chi2_stat <- chisq.test(contingency_table, correct = FALSE)$statistic
-    n <- sum(contingency_table)
-    min_dim <- min(nrow(contingency_table), ncol(contingency_table)) - 1
+    # Compute Cramér's V
+    chi2_stat <- chisq.test(contingency_table, correct = FALSE)$statistic  # Chi-squared statistic
+    n <- sum(contingency_table)  # Total number of observations
+    min_dim <- min(nrow(contingency_table), ncol(contingency_table)) - 1  # Min(rows, cols) - 1
     
-    cramers_v <- sqrt(as.numeric(chi2_stat) / (n * min_dim))
+    cramers_v <- sqrt(as.numeric(chi2_stat) / (n * min_dim))  # Cramér's V formula
     
     paste("Cramér's V:", round(cramers_v, 3))
   })
   
-  
-  
   ### ML MODELS
   
-  ## Target variable 
+  ## Select Target Variable
   
   # Observe the uploaded data and update the choices in target_variable
   observe({
-    req(display_data())  # Ensure the data is loaded
-    col_names <- colnames(display_data())  # Get column names from display_data
+    req(display_data())  # Ensure data is loaded
+    col_names <- colnames(display_data())  # Get column names
     updateSelectInput(session, "target_variable", choices = col_names)
   })
   
@@ -877,63 +1018,249 @@ server <- function(input, output, session) {
     data <- training_data()
     target_var <- input$target_variable
     
+    data_display <- display_data()
+    target_var_display <- input$target_variable
+    
+    # Handle missing values
+    data <- na.omit(data)  # Remove rows with missing values
+    data_display <- na.omit(data_display)
+    
+    # Apply label encoding for categorical data
+    data <- data %>%
+      mutate(across(where(is.character), ~ as.numeric(factor(.)))) %>%
+      mutate(across(where(is.factor), ~ as.numeric(factor(.))))
+    
     # Drop the target variable from the training data
     if (target_var %in% colnames(data)) {
       Y <- data[[target_var]]  # Extract the target variable
+      y_display(data_display[[target_var_display]])
       data[[target_var]] <- NULL  # Remove the target variable
-      training_data(data)  # Update the reactive variable
+      training_data(data)# Update the reactive variable
+      display_data(data_display)# Update the Reactive Variable
     }
-    print(Y)
-    y(Y)
+    y(Y)  # Update the reactive value of y
     
     # Provide feedback
-    showNotification("Target variable successfully selected and removed from training data.", type = "message")
+    showNotification(
+      paste("Target variable", input$target_variable, "successfully selected and removed from training data..."),
+      type = "message"
+    )
     
     # Disable the select input to prevent further changes
     shinyjs::disable("target_variable")
     shinyjs::disable("validate_target")
+    
+    # Show the boxes if the target variable is categorical
+    if (is.factor(Y) || is.character(Y)) {
+      shinyjs::show("target_histogram_box")  # Show the histogram box
+      shinyjs::show("resampling_box")  # Show the resampling box
+    }
+    
+    # Debugging: Print row counts
+    cat("Number of rows in training_data:\n", nrow(training_data()), "\n")
+    cat("Number of rows in display_data:\n", nrow(display_data()), "\n")
+    cat("Number of rows in y:\n", length(y()), "\n")
+    cat("Number of rows in y_display:\n", length(y_display()), "\n")
   })
+  
+  
   
   ## Resampling the target variable 
   
-  # Render histogram for the target variable if it is categorical
-  output$target_histogram <- renderPlot({
-    req(input$target_variable)  # Ensure the target variable is selected
-    req(y())  # Ensure the target variable is saved in Y
+  # Render the output for the target variable
+  output$target_summary <- renderUI({
+    req(y, y_display())  # Ensure the target variable (y) is set
     
-    target_data <- y()
+    target_data <- y_display()  # Retrieve the target variable stored in y()
     
-    # Check if the target variable is categorical
     if (is.factor(target_data) || is.character(target_data)) {
-      barplot(table(target_data), main = "Target Variable Distribution", col = "skyblue", 
-              xlab = "Categories", ylab = "Frequency")
+      # Render histogram for categorical target variable
+      plotOutput("target_histogram", height = "350px")
+    } else if (is.numeric(target_data)) {
+      # Render summary statistics for numerical target variable
+      stats <- list(
+        "Mean" = mean(target_data, na.rm = TRUE),
+        "Median" = median(target_data, na.rm = TRUE),
+        "Min" = min(target_data, na.rm = TRUE),
+        "Max" = max(target_data, na.rm = TRUE),
+        "Range" = diff(range(target_data, na.rm = TRUE)),
+        "Variance" = var(target_data, na.rm = TRUE),
+        "Standard Deviation" = sd(target_data, na.rm = TRUE),
+        "Number of Values" = sum(!is.na(target_data))
+      )
+      renderStatsTable(stats)
     } else {
-      return(NULL)  # Do not render if the target variable is not categorical
+      return(NULL)  # Do not render anything if target is neither categorical nor numeric
     }
   })
   
+  # Helper function to render statistics as a table
+  renderStatsTable <- function(stats) {
+    tags$table(
+      class = "table table-striped",
+      tags$thead(
+        tags$tr(
+          tags$th("Statistic"),
+          tags$th("Value")
+        )
+      ),
+      tags$tbody(
+        lapply(names(stats), function(stat_name) {
+          tags$tr(
+            tags$td(stat_name),
+            tags$td(round(stats[[stat_name]], 2))
+          )
+        })
+      )
+    )
+  }
+  
+  # Render histogram for categorical target variable
+  output$target_histogram <- renderPlot({
+    req(y, y_display())  # Ensure the target variable (y) is set
+    
+    target_data <- y_display()  # Retrieve the target variable stored in y()
+    
+    barplot(
+      table(target_data),
+      main = "Target Variable Distribution",
+      col = "skyblue",
+      xlab = "Categories",
+      ylab = "Frequency"
+    )
+  }, height = 350)
+  
+  # Dynamic title for the target variable box
+  output$target_box_title <- renderText({
+    req(input$target_variable)  # Ensure a target variable is selected
+    
+    target_data <- y_display()  # Replace with y_display() or your actual target data
+    
+    if (is.factor(target_data) || is.character(target_data)) {
+      "Target Variable Distribution"
+    } else if (is.numeric(target_data)) {
+      "Target Variable Summary"
+    } else {
+      "Target Variable Details"
+    }
+  })
+  
+  # Server logic to dynamically update the UI
+  output$resampling_ui <- renderUI({
+    req(y_display())
+    target_variable <- y_display()
+    if (is.numeric(target_variable)) { # Replace with your logic to check if the target variable is numerical
+      tagList(
+        p("Numerical values have no resampling technique available.")
+      )
+    } else {
+      tagList(
+        selectInput("resampling_technique", "Choose Resampling Technique", 
+                    choices = c("undersampling", "oversampling"), 
+                    selected = "oversampling"),
+        actionButton("apply_resampling", "Apply Resampling")
+      )
+    }
+  })
+  
+  # Reactive value to track if resampling is active
+  resampling_active <- reactiveVal(FALSE)
+  
+  # Confirmation dialog for resampling
   observeEvent(input$apply_resampling, {
-    req(y()) 
-    req(training_data())
-    
-    data <- training_data()
-    target_data <- y()
-    data$Target <- target_data
-    
-    if (input$resampling_technique == "undersampling") {
-      balanced_data <- ovun.sample(Target ~ ., data = data, method = "under")$data
-    } else if (input$resampling_technique == "oversampling") {
-      balanced_data <- ovun.sample(Target ~ ., data = data, method = "over")$data
-    }
-    
-    balanced_target <- balanced_data$Target
-    balanced_data$Target <- NULL
-    training_data(balanced_data)
-    y(balanced_target)
-    
-    showNotification(paste("Resampling applied using", input$resampling_technique, "."), type = "message")
+    # Show confirmation modal
+    showModal(
+      modalDialog(
+        title = "Confirm Resampling",
+        "Are you sure you want to apply the selected resampling technique?",
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton("confirm_resampling", "Confirm")
+        )
+      )
+    )
   })
   
+  # Handle confirm action
+  observeEvent(input$confirm_resampling, {
+    removeModal()  # Close the modal
+    
+    # Immediately disable controls
+    shinyjs::disable("resampling_technique")
+    shinyjs::disable("apply_resampling")
+    
+    # Set resampling as active
+    resampling_active(TRUE)
+    
+    # Perform resampling logic
+    resampling_technique <- input$resampling_technique
+    target_var <- as.factor(y())
+    target_var_display <- y_display()
+    training_data_current <- training_data()
+    
+    # Validation
+    if (nrow(training_data_current) != length(target_var)) {
+      showNotification("Mismatch between training data and target variable rows.", type = "error")
+      shinyjs::enable("resampling_technique")
+      shinyjs::enable("apply_resampling")
+      resampling_active(FALSE)
+      return()
+    }
+    
+    target_mapping <- data.frame(
+      encoded = levels(target_var),
+      original = unique(target_var_display)
+    )
+    if (nrow(target_mapping) != length(levels(target_var))) {
+      showNotification("Mismatch in mapping between encoded and original target values.", type = "error")
+      shinyjs::enable("resampling_technique")
+      shinyjs::enable("apply_resampling")
+      resampling_active(FALSE)
+      return()
+    }
+    
+    # Perform the resampling
+    if (resampling_technique == "undersampling") {
+      resampled_data <- caret::downSample(x = training_data_current, y = target_var)
+    } else if (resampling_technique == "oversampling") {
+      resampled_data <- caret::upSample(x = training_data_current, y = target_var)
+    } else {
+      showNotification("Invalid resampling technique selected.", type = "error")
+      shinyjs::enable("resampling_technique")
+      shinyjs::enable("apply_resampling")
+      resampling_active(FALSE)
+      return()
+    }
+    
+    if (!".dataClass" %in% colnames(resampled_data)) {
+      resampled_data$.dataClass <- rep(levels(target_var), length.out = nrow(resampled_data))
+    }
+    
+    resampled_y <- as.character(resampled_data$.dataClass)
+    resampled_y_display <- target_mapping$original[match(resampled_y, target_mapping$encoded)]
+    
+    # Update reactive variables
+    training_data(resampled_data[, !(names(resampled_data) %in% ".dataClass"), drop = FALSE])
+    y(as.factor(resampled_data$.dataClass))
+    y_display(resampled_y_display)
+    
+    # Show success notification
+    showNotification(
+      paste("Resampling using", resampling_technique, "successfully applied."),
+      type = "message"
+    )
+  })
+  
+  # Re-enable controls manually if needed
+  observeEvent(input$reset_resampling, {
+    resampling_active(FALSE)  # Reset state
+    shinyjs::enable("resampling_technique")
+    shinyjs::enable("apply_resampling")
+    showNotification("Resampling controls re-enabled.", type = "message")
+  })
+  
+  
+  ## Split Data
   
   observeEvent(input$train_percentage, {
     updateSliderInput(
@@ -964,6 +1291,19 @@ server <- function(input, output, session) {
     data <- training_data()
     target <- y()
     
+    # Ensure all features are numeric
+    non_numeric_columns <- sapply(data, is.numeric) == FALSE
+    
+    if (any(non_numeric_columns)) {
+      data[non_numeric_columns] <- lapply(data[non_numeric_columns], function(col) {
+        if (is.factor(col) || is.character(col)) {
+          as.numeric(factor(col))  # Convert categorical variables to numeric using factor encoding
+        } else {
+          stop("Unsupported non-numeric column detected.")  # Handle unexpected cases
+        }
+      })
+    }
+    
     if (input$split_method == "Holdout") {
       train_percentage <- input$train_percentage / 100
       test_percentage <- input$test_percentage / 100
@@ -988,6 +1328,7 @@ server <- function(input, output, session) {
           Test_Distribution = table(splits$test_target)
         )
       })
+  
       
       output$split_message <- renderText({
         paste(
@@ -1005,14 +1346,10 @@ server <- function(input, output, session) {
     else {
       print("split method don't exist")
     }
-      
-    })
+    
+  })
   
-  
-  
-  
-  
-  
+  # Select the models depends on the target variable
   observeEvent(input$validate_target, {
     req(y())  # Ensure the target variable is available
     
@@ -1030,8 +1367,7 @@ server <- function(input, output, session) {
     }
   })
   
-  
-  
+
   observe({
     req(y())  # Ensure the target variable is available
     
@@ -1056,6 +1392,8 @@ server <- function(input, output, session) {
       showNotification("Unsupported target variable type. Please check your data.", type = "error")
     }
   })
+  
+  # Train Model
   reactive_metrics <- reactiveValues(data = NULL)
   
   observeEvent(input$train_model, {
@@ -1130,8 +1468,6 @@ server <- function(input, output, session) {
       print("no model is chosen")
     }
     
-    
-    
     # Save trained model to a reactive value
     reactive_model <<- model
     
@@ -1141,9 +1477,6 @@ server <- function(input, output, session) {
     })
   })
   
-  
-  
-  
   # Logic to save the trained model
   output$save_model <- downloadHandler(
     filename = function() {
@@ -1152,9 +1485,11 @@ server <- function(input, output, session) {
     content = function(file) {
       saveRDS(reactive_model, file)
     }
-  ) 
+  )
   
-  reactive_values <- reactiveValues(conf_matrix = NULL)
+  ### Results
+  
+    reactive_values <- reactiveValues(conf_matrix = NULL)
   
   observeEvent(input$show_results, {
     req(reactive_model, splits$test_data, splits$test_target)
@@ -1419,12 +1754,4 @@ server <- function(input, output, session) {
   })
   
   
-    
-  }
-
-
-  
-
-
-  
-  
+}
