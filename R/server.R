@@ -662,7 +662,7 @@ server <- function(input, output, session) {
     data <- display_data()
     plot_ly(data, x = ~get(input$x_variable_bi), y = ~get(input$y_variable), type = "scatter", mode = "markers")
   })
-  # correlation coefficient 
+  
   # Reactive check if both variables are numeric
   is_both_numeric <- reactive({
     req(display_data(), input$x_variable_bi, input$y_variable)
@@ -714,7 +714,6 @@ server <- function(input, output, session) {
     paste("Correlation Coefficient (r):", round(corr, 3))
   })
   
-  
   # Correlation matrix
   output$correlation_matrix_plot <- renderPlot({
     req(display_data())
@@ -723,12 +722,13 @@ server <- function(input, output, session) {
     corrplot::corrplot(corr, method = "color", type = "upper")
   })
   
-  #calculate the coefficient between quantitative and qualitative 
   # Reactive check if X is qualitative and Y is quantitative
   is_qualitative_quantitative <- reactive({
     req(display_data(), input$x_variable_bi, input$y_variable)
     data <- display_data()
-    (is.factor(data[[input$x_variable_bi]]) || is.character(data[[input$x_variable_bi]])) &&
+    (is.factor(data[[input$x_variable_bi]]) || 
+        is.character(data[[input$x_variable_bi]]) ||
+        (is.numeric(data[[input$x_variable_bi]]) && length(unique(data[[input$x_variable_bi]])) <= 10)) &&
       is.numeric(data[[input$y_variable]])
   })
   
@@ -745,35 +745,21 @@ server <- function(input, output, session) {
     x <- data[[input$x_variable_bi]]
     y <- data[[input$y_variable]]
     
-    # Compute the overall mean of Y
     y_bar <- mean(y, na.rm = TRUE)
-    
-    # Compute the total variance of Y
     s2_y <- mean((y - y_bar)^2, na.rm = TRUE)
     
-    # Group data by levels of X
     grouped_data <- split(y, x)
     
-    # Compute explained variance (s2_E) and residual variance (s2_R)
     s2_E <- sum(sapply(grouped_data, function(group) {
       n_l <- length(group)
       y_bar_l <- mean(group, na.rm = TRUE)
       n_l * (y_bar_l - y_bar)^2
     })) / length(y)
     
-    s2_R <- sum(sapply(grouped_data, function(group) {
-      n_l <- length(group)
-      var_l <- var(group, na.rm = TRUE)
-      n_l * var_l
-    })) / length(y)
-    
-    # Correlation ratio
     c_y_given_x <- sqrt(s2_E / s2_y)
     
     paste("Correlation Ratio (c_Y|X):", round(c_y_given_x, 3))
   })
-  
-  
   
   # Boxplot (parallel)
   output$boxplot_parallel <- renderPlot({
@@ -784,7 +770,9 @@ server <- function(input, output, session) {
     
     validate(
       need(is.numeric(y), "Y Variable must be numeric."),
-      need(is.factor(x) || is.character(x), "X Variable must be categorical.")
+      need(is.factor(x) || is.character(x) || 
+             (is.numeric(x) && length(unique(x)) <= 10), 
+           "X Variable must be categorical.")
     )
     
     ggplot(data, aes(x = as.factor(x), y = y)) +
@@ -801,8 +789,12 @@ server <- function(input, output, session) {
     y <- data[[input$y_variable]]
     
     validate(
-      need(is.factor(x) || is.character(x), "X Variable must be categorical."),
-      need(is.factor(y) || is.character(y), "Y Variable must be categorical.")
+      need(is.factor(x) || is.character(x) || 
+             (is.numeric(x) && length(unique(x)) <= 10), 
+           "X Variable must be categorical."),
+      need(is.factor(y) || is.character(y) || 
+             (is.numeric(y) && length(unique(y)) <= 10), 
+           "Y Variable must be categorical.")
     )
     
     contingency_table <- table(x, y)
@@ -822,14 +814,15 @@ server <- function(input, output, session) {
       scale_y_continuous(labels = scales::percent)
   })
   
-  ## contingency table and cramer coefficent 
-  # Reactive check if both variables are qualitative (including label-encoded)
+  # Reactive check if both variables are qualitative
   is_qualitative_qualitative <- reactive({
     req(display_data(), input$x_variable_bi, input$y_variable)
     data <- display_data()
     
     is_qualitative <- function(var) {
-      is.factor(var) || is.character(var) || (is.numeric(var) && length(unique(var)) <= 10)
+      is.factor(var) || 
+        is.character(var) || 
+        (is.numeric(var) && length(unique(var)) <= 10)
     }
     
     is_qualitative(data[[input$x_variable_bi]]) && is_qualitative(data[[input$y_variable]])
@@ -852,20 +845,16 @@ server <- function(input, output, session) {
     x <- data[[input$x_variable_bi]]
     y <- data[[input$y_variable]]
     
-    # Create contingency table
     contingency_table <- table(x, y)
     
-    # Compute Cramér's V
-    chi2_stat <- chisq.test(contingency_table, correct = FALSE)$statistic  # Chi-squared statistic
-    n <- sum(contingency_table)  # Total number of observations
-    min_dim <- min(nrow(contingency_table), ncol(contingency_table)) - 1  # Min(rows, cols) - 1
+    chi2_stat <- chisq.test(contingency_table, correct = FALSE)$statistic
+    n <- sum(contingency_table)
+    min_dim <- min(nrow(contingency_table), ncol(contingency_table)) - 1
     
-    cramers_v <- sqrt(as.numeric(chi2_stat) / (n * min_dim))  # Cramér's V formula
+    cramers_v <- sqrt(as.numeric(chi2_stat) / (n * min_dim))
     
     paste("Cramér's V:", round(cramers_v, 3))
   })
-  
-  
   
   
   
@@ -1364,38 +1353,52 @@ server <- function(input, output, session) {
         
       } else if (inherits(reactive_model, "rpart")) {
         # Extract feature importance for Decision Tree using caret
-        importance_vals <- caret::varImp(reactive_model)
+        importance_vals <- tryCatch({
+          caret::varImp(reactive_model)
+        }, error = function(e) {
+          cat("Error extracting feature importance for Decision Tree: ", e$message, "\n")
+          return(NULL)
+        })
         
-        # Ensure that the importance is a vector (extract only the importance values)
-        importance_vector <- importance_vals$importance[, 1]  # This extracts the first column (importance values)
-        
-        # Check if importance_vector is a valid vector
-        if (is.vector(importance_vector)) {
-          # Create a bar plot for feature importance
-          barplot(importance_vector, 
-                  names.arg = rownames(importance_vals$importance),
-                  main = "Decision Tree Feature Importance",
-                  col = "lightgreen", 
-                  las = 2, 
-                  beside = TRUE,
-                  cex.names = 0.8)
-        } else {
-          print("Error: The importance values are not in a valid format.")
+        # Check the structure of importance_vals
+        if (!is.null(importance_vals)) {
+          print("Structure of importance_vals:")
+          print(str(importance_vals))
+          
+          # Adjust based on actual structure
+          if ("Overall" %in% colnames(importance_vals$importance)) {
+            barplot(importance_vals$importance$Overall,
+                    names.arg = rownames(importance_vals$importance),
+                    main = "Decision Tree Feature Importance",
+                    col = "lightgreen",
+                    las = 2,
+                    beside = TRUE,
+                    cex.names = 0.8)
+          } else {
+            print("Error: 'Overall' column is not available in importance data.")
+          }
         }
+        
         
       } else if (inherits(reactive_model, "svm")) {
         # Ensure that the SVM model is linear
         if (reactive_model$type == "C-classification" && reactive_model$kernel == "linear") {
           # Extract coefficients for feature importance in a linear SVM
-          coef_vals <- abs(reactive_model$coefs)
-          feature_names <- colnames(splits$test_data)
-          barplot(coef_vals, 
-                  names.arg = feature_names,
-                  main = "SVM Feature Importance",
-                  col = "lightcoral", 
-                  las = 2, 
-                  beside = TRUE,
-                  cex.names = 0.8)
+          coef_vals <- abs(t(reactive_model$coefs) %*% reactive_model$SV)  # Compute the importance
+          feature_names <- colnames(splits$test_data)  # Ensure feature names align with dataset
+          
+          # Check if feature names and coefficients align
+          if (length(feature_names) == length(coef_vals)) {
+            barplot(coef_vals,
+                    names.arg = feature_names,
+                    main = "SVM Feature Importance",
+                    col = "lightcoral",
+                    las = 2,
+                    beside = TRUE,
+                    cex.names = 0.8)
+          } else {
+            print("Error: Number of features does not match the coefficients.")
+          }
         } else {
           print("Non-linear SVM does not have a simple feature importance plot.")
         }
