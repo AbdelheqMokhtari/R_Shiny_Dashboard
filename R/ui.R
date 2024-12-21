@@ -319,7 +319,7 @@ ui <- dashboardPage(
             selectInput(
               "split_method",
               "Choose a Data Split Method:",
-              choices = c("Holdout", "Cross-validation"),
+              choices = c("Holdout"),
               selected = "Holdout"
             ),
             conditionalPanel(
@@ -407,6 +407,7 @@ ui <- dashboardPage(
       tabItem(
         tabName = "results",
         fluidRow(
+          # First row of boxes
           box(
             title = "Model Metrics", status = "primary", solidHeader = TRUE, width = 4,
             actionButton("show_results", "Show Results"),  # Button to trigger results
@@ -422,8 +423,16 @@ ui <- dashboardPage(
             h4("AUC Score:"),
             textOutput("auc_score")
           )
+        ),
+        # New fluidRow with box for graph
+        fluidRow(
+          box(
+            title = "Feature Importance", status = "primary", solidHeader = TRUE, width = 12,
+            plotOutput("feature_importance_plot")  # Graph to display feature importance
+          )
         )
       )
+      
 )
 )
 )

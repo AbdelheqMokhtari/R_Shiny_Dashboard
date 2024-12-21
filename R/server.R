@@ -967,7 +967,6 @@ server <- function(input, output, session) {
     train_target = NULL,
     test_data = NULL,
     test_target = NULL,
-    folds = NULL
   )
   
   observeEvent(input$split_data, {
@@ -1013,28 +1012,13 @@ server <- function(input, output, session) {
       
       showNotification("Data successfully prepared for Holdout split.", type = "message")
       
-    } else if (input$split_method == "Cross-validation") {
-      req(input$k_folds)
-      k <- input$k_folds
-      
-      if (k < 2) {
-        showNotification("Number of folds must be at least 2.", type = "error")
-        return()
-      }
-      
-      set.seed(123)
-      splits$folds <- caret::createFolds(target, k = k, list = TRUE, returnTrain = TRUE)
-      
-      output$split_message <- renderText({
-        paste(
-          "Cross-validation setup completed.\n",
-          "Number of folds: ", k, "\n"
-        )
-      })
-      
-      showNotification(paste("Data successfully prepared for", k, "fold cross-validation."), type = "message")
+    } 
+    else {
+      print("split method don't exist")
     }
-  })
+      
+    })
+  
   
   
   
@@ -1097,70 +1081,67 @@ server <- function(input, output, session) {
       req(splits$train_data, splits$train_target)  # Ensure Holdout split is ready
       data <- splits$train_data
       target <- splits$train_target
+      # Train the model based on the selected model choice
+      if (input$model_choice == "SVM") {
+        req(input$svm_C, input$svm_kernel)
+        
+        # Train SVM model
+        model <- e1071::svm(
+          x = data,
+          y = target,
+          cost = input$svm_C,
+          kernel = input$svm_kernel
+        )
+        
+        output$model_message <- renderText("SVM model trained successfully!")
+        
+      } else if (input$model_choice == "Random Forest") {
+        req(input$rf_trees)
+        
+        # Train Random Forest model
+        model <- randomForest::randomForest(
+          x = data,
+          y = target,
+          ntree = input$rf_trees
+        )
+        
+        output$model_message <- renderText("Random Forest model trained successfully!")
+        
+      } else if (input$model_choice == "Linear Regression") {
+        
+        
+        # Train Linear Regression model
+        formula <- as.formula(paste("target ~ ."))
+        model <- lm(formula, data = data.frame(data, target = target))
+        
+        output$model_message <- renderText("Linear Regression model trained successfully!")
+        
+      } else if (input$model_choice == "Decision Tree") {
+        req(input$dt_max_depth, input$dt_criterion)
+        
+        
+        # Train Decision Tree model
+        model <- rpart::rpart(
+          formula = as.formula(paste("target ~ .")),
+          data = data.frame(data, target = target),
+          method = ifelse(is.numeric(target), "anova", "class"),
+          control = rpart::rpart.control(maxdepth = input$dt_max_depth),
+          parms = list(split = input$dt_criterion)
+        )
+        
+        output$model_message <- renderText("Decision Tree model trained successfully!")
+        
+      } else {
+        output$model_message <- renderText("Invalid model choice. Please select a valid model.")
+        return()
+      }
       
-    } else if (input$split_method == "Cross-validation") {
-      req(splits$folds)  # Ensure Cross-validation split is ready
-      
-      # Use the first fold for training as an example
-      fold_indices <- splits$folds[[1]]
-      data <- training_data()[fold_indices, , drop = FALSE]
-      target <- y()[fold_indices]
+    } 
+    else {
+      print("no model is chosen")
     }
     
-    # Train the model based on the selected model choice
-    if (input$model_choice == "SVM") {
-      req(input$svm_C, input$svm_kernel)
-      
-      # Train SVM model
-      model <- e1071::svm(
-        x = data,
-        y = target,
-        cost = input$svm_C,
-        kernel = input$svm_kernel
-      )
-      
-      output$model_message <- renderText("SVM model trained successfully!")
-      
-    } else if (input$model_choice == "Random Forest") {
-      req(input$rf_trees)
-      
-      # Train Random Forest model
-      model <- randomForest::randomForest(
-        x = data,
-        y = target,
-        ntree = input$rf_trees
-      )
-      
-      output$model_message <- renderText("Random Forest model trained successfully!")
-      
-    } else if (input$model_choice == "Linear Regression") {
-      
-      
-      # Train Linear Regression model
-      formula <- as.formula(paste("target ~ ."))
-      model <- lm(formula, data = data.frame(data, target = target))
-      
-      output$model_message <- renderText("Linear Regression model trained successfully!")
-      
-    } else if (input$model_choice == "Decision Tree") {
-      req(input$dt_max_depth, input$dt_criterion)
-      
-      
-      # Train Decision Tree model
-      model <- rpart::rpart(
-        formula = as.formula(paste("target ~ .")),
-        data = data.frame(data, target = target),
-        method = ifelse(is.numeric(target), "anova", "class"),
-        control = rpart::rpart.control(maxdepth = input$dt_max_depth),
-        parms = list(split = input$dt_criterion)
-      )
-      
-      output$model_message <- renderText("Decision Tree model trained successfully!")
-      
-    } else {
-      output$model_message <- renderText("Invalid model choice. Please select a valid model.")
-      return()
-    }
+    
     
     # Save trained model to a reactive value
     reactive_model <<- model
@@ -1170,6 +1151,8 @@ server <- function(input, output, session) {
       downloadButton("save_model", "Save Model")
     })
   })
+  
+  
   
   
   # Logic to save the trained model
@@ -1184,119 +1167,12 @@ server <- function(input, output, session) {
   
   reactive_values <- reactiveValues(conf_matrix = NULL)
   
-  
   observeEvent(input$show_results, {
     req(reactive_model, splits$test_data, splits$test_target)
-    
-    if (input$split_method == "Cross-validation") {
-      # Handle cross-validation results
-      cv_results <- reactive_model$resample  # Extract resample results from cross-validation
-      
-      
-      print("Cross-validation results:")
-      print(head(cv_results))
-      print(cv_results)  # Print the full cross-validation results
-      
-      if (!is.null(cv_results)) {
-        if (inherits(reactive_model, "rpart") || inherits(reactive_model, "lm")) {
-          # Regression Metrics Aggregation (Decision Tree, Linear Regression)
-          print("Processing regression metrics...")
-          
-          mse <- mean(cv_results$MSE, na.rm = TRUE)  # Average MSE across folds
-          rmse <- mean(cv_results$RMSE, na.rm = TRUE)  # Average RMSE across folds
-          r_squared <- mean(cv_results$R2, na.rm = TRUE)  # Average R-squared across folds
-          
-          print(paste("Average MSE across folds:", mse))
-          print(paste("Average RMSE across folds:", rmse))
-          print(paste("Average R-squared across folds:", r_squared))
-          
-          # Display Regression Metrics
-          metrics <- data.frame(
-            Metric = c("MSE", "RMSE", "R-squared"),
-            Value = c(mse, rmse, r_squared)
-          )
-          
-          output$model_metrics <- renderTable({
-            metrics
-          }, rownames = FALSE)
-          
-        } else if (inherits(reactive_model, "svm") || inherits(reactive_model, "randomForest")) {
-          # Classification Metrics Aggregation (SVM, Random Forest)
-          print("Processing classification metrics...")
-          
-          accuracy <- mean(cv_results$Accuracy, na.rm = TRUE)
-          precision <- mean(cv_results$Precision, na.rm = TRUE)
-          recall <- mean(cv_results$Recall, na.rm = TRUE)
-          f1 <- mean(cv_results$F1, na.rm = TRUE)
-          
-          print(paste("Average Accuracy across folds:", accuracy))
-          print(paste("Average Precision across folds:", precision))
-          print(paste("Average Recall across folds:", recall))
-          print(paste("Average F1 Score across folds:", f1))
-          
-          # Display Classification Metrics
-          metrics <- data.frame(
-            Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
-            Value = c(accuracy, precision, recall, f1)
-          )
-          
-          output$model_metrics <- renderTable({
-            metrics
-          }, rownames = FALSE)
-          
-          # Draw Confusion Matrix
-          print("Aggregating confusion matrices...")
-          aggregated_conf_matrix <- Reduce(`+`, cv_results$ConfusionMatrix)  # Aggregate confusion matrices across folds
-          print("Aggregated Confusion Matrix:")
-          print(aggregated_conf_matrix)
-          
-          output$conf_matrix_plot <- renderPlot({
-            heatmap(
-              as.matrix(aggregated_conf_matrix), Rowv = NA, Colv = NA,
-              col = colorRampPalette(c("white", "blue"))(100),
-              scale = "none", margins = c(5, 5), xlab = "Actual", ylab = "Predicted"
-            )
-          })
-          
-          # Draw ROC Curve and AUC Score
-          print("Aggregating probabilities and targets for ROC curve...")
-          all_probabilities <- unlist(cv_results$Probabilities)
-          all_targets <- unlist(cv_results$Actual)
-          
-          print("Sample of all probabilities:")
-          print(head(all_probabilities))
-          print("Sample of all targets:")
-          print(head(all_targets))
-          
-          output$roc_curve <- renderPlot({
-            library(pROC)
-            roc_obj <- roc(all_targets, all_probabilities)
-            auc_score <- auc(roc_obj)
-            
-            print(paste("Computed AUC Score:", auc_score))
-            
-            # Plot ROC Curve
-            plot(roc_obj, col = "blue", lwd = 2, main = "ROC Curve (Cross-validation)")
-            legend("bottomright", legend = paste("AUC =", round(auc_score, 3)), bty = "n", cex = 1.2)
-          })
-        } else {
-          print("Error: Invalid model type for cross-validation")
-          output$model_metrics <- renderTable({
-            data.frame(Metric = "Error", Value = "Invalid model type for cross-validation")
-          })
-        }
-      } else {
-        print("Error: No results from cross-validation")
-        output$model_metrics <- renderTable({
-          data.frame(Metric = "Error", Value = "No results from cross-validation")
-        })
-      }
-    }
-    else{
+    req(splits, input$model_choice)
     
     # Initialize variables
     predictions <- predict(reactive_model, newdata = splits$test_data)
-    # Ensure the target is a factor (if it's not already)
     target <- factor(splits$test_target)
     
     # Extract unique values in the target variable and store them in levels
@@ -1327,7 +1203,6 @@ server <- function(input, output, session) {
       
       # If the predictions are continuous (e.g., probabilities), convert them to class labels
       if (is.numeric(predictions)) {
-        # For multi-class classification, map continuous predictions to the nearest ordinal category
         predictions <- round(predictions)  # Round predictions to the nearest integer
         
         # Ensure predictions are within valid range
@@ -1341,7 +1216,6 @@ server <- function(input, output, session) {
       
       # Handle missing predictions correctly
       if (any(is.na(predictions))) {
-        # Replace NAs with a valid default class (ensure the default class is in the factor levels)
         predictions[is.na(predictions)] <- levels(target)[1]  # Use the first level of target as default
       }
       
@@ -1451,19 +1325,103 @@ server <- function(input, output, session) {
       output$model_metrics <- renderTable({
         metrics
       }, rownames = FALSE)
-    }
+      
+      # Render regression metrics
+      output$conf_matrix_plot <- renderPlot({
+        plot(target, predictions, 
+             xlab = "Actual Values", 
+             ylab = "Predicted Values", 
+             main = "Prediction vs Actual Plot",
+             col = "blue", pch = 16)
+        abline(0, 1, col = "red", lwd = 2) # Add line y = x
+      })
+      
+      # Plot 2: Residuals vs. Predictions
+      output$roc_curve <- renderPlot({
+        residuals <- target - predictions
+        plot(predictions, residuals, 
+             xlab = "Predicted Values", 
+             ylab = "Residuals", 
+             main = "Residuals vs Predicted Plot",
+             col = "darkgreen", pch = 16)
+        abline(h = 0, col = "red", lwd = 2) # Add horizontal line at 0
+      })
+      
     }
     
+    output$feature_importance_plot <- renderPlot({
+      # Random Forest
+      if (inherits(reactive_model, "randomForest")) {
+        # Extract feature importance for Random Forest
+        importance_vals <- randomForest::importance(reactive_model)
+        barplot(importance_vals[, 1], 
+                names.arg = rownames(importance_vals),
+                main = "Random Forest Feature Importance",
+                col = "lightblue", 
+                las = 2, 
+                beside = TRUE,
+                cex.names = 0.8)
+        
+      } else if (inherits(reactive_model, "rpart")) {
+        # Extract feature importance for Decision Tree using caret
+        importance_vals <- caret::varImp(reactive_model)
+        
+        # Ensure that the importance is a vector (extract only the importance values)
+        importance_vector <- importance_vals$importance[, 1]  # This extracts the first column (importance values)
+        
+        # Check if importance_vector is a valid vector
+        if (is.vector(importance_vector)) {
+          # Create a bar plot for feature importance
+          barplot(importance_vector, 
+                  names.arg = rownames(importance_vals$importance),
+                  main = "Decision Tree Feature Importance",
+                  col = "lightgreen", 
+                  las = 2, 
+                  beside = TRUE,
+                  cex.names = 0.8)
+        } else {
+          print("Error: The importance values are not in a valid format.")
+        }
+        
+      } else if (inherits(reactive_model, "svm")) {
+        # Ensure that the SVM model is linear
+        if (reactive_model$type == "C-classification" && reactive_model$kernel == "linear") {
+          # Extract coefficients for feature importance in a linear SVM
+          coef_vals <- abs(reactive_model$coefs)
+          feature_names <- colnames(splits$test_data)
+          barplot(coef_vals, 
+                  names.arg = feature_names,
+                  main = "SVM Feature Importance",
+                  col = "lightcoral", 
+                  las = 2, 
+                  beside = TRUE,
+                  cex.names = 0.8)
+        } else {
+          print("Non-linear SVM does not have a simple feature importance plot.")
+        }
+        
+      } else if (inherits(reactive_model, "lm")) {
+        # For Linear Regression, extract coefficients for feature importance
+        coef_vals <- abs(coef(reactive_model)[-1])  # Exclude the intercept (first element)
+        feature_names <- names(coef(reactive_model))[-1]  # Exclude the intercept from feature names
+        barplot(coef_vals, 
+                names.arg = feature_names,
+                main = "Linear Regression Feature Importance",
+                col = "lightyellow", 
+                las = 2, 
+                beside = TRUE,
+                cex.names = 0.8)
+      }
+    })
   })
   
   
-  
-  
-}
+    
+  }
+
 
   
-  
-  
-  
+
+
   
   
