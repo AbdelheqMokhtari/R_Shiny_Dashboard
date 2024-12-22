@@ -1936,7 +1936,7 @@ server <- function(input, output, session) {
       <p><strong>Objective:</strong> To analyze and model the housing dataset to predict factors like price based on various attributes such as area, number of bedrooms, and locality.</p>
       <p><strong>Dataset Overview:</strong> The dataset contains housing details, including size, price, location, and other features that can influence housing prices.</p>
       
-      <img src="www/dataset_housing_description.png" alt="Dataset Overview" width="500">
+      <img src="housing_dataset/dataset_housing_description.png" alt="Dataset Overview" width="500">
 
       <h2>2. Dataset Description</h2>
       <p><strong>Summary:</strong> The dataset includes the following features:</p>
@@ -1956,15 +1956,15 @@ server <- function(input, output, session) {
         <li><code>furnishingstatus</code>: Furnishing status of the house (furnished/semi-furnished/unfurnished).</li>
       </ul>
       
-      <img src="www/dataset_housing_summary.png" alt="Dataset Description" width="500">
+      <img src="housing_dataset/dataset_housing_summary.png" alt="Dataset Description" width="500">
      
 
       <h2>3. Preprocessing</h2>
       <p><strong>Steps Taken:</strong> Applied the following preprocessing steps:</p>
       <ul>
-        <li>Handled missing values in numerical columns like <code>area</code> by replacing them with the median.</li>
-        <li>Converted categorical variables like <code>mainroad</code> and <code>guestroom</code> to numerical using label encoding.</li>
-        <li>Normalized numerical features such as <code>price</code> and <code>area</code> using Min-Max scaling.</li>
+        <li>the dataset does not contain any missing values, no need to handle them.</li>
+        <li>Converted all categorical variables like <code>mainroad</code> and <code>guestroom</code> to numerical using label encoding.</li>
+        <li>Normalized numerical features such as <code>bedrooms</code>,<code>bathrooms</code>,<code>stories</code> and <code>parking</code>  using Min-Max scaling.</li>
       </ul>
       <p><strong>Rationale:</strong> Preprocessing ensures data consistency, handles missing values, and prepares the data for machine learning models.</p>
 
@@ -1975,8 +1975,8 @@ server <- function(input, output, session) {
       <p>Scatter plots reveal strong positive correlations between <code>area</code> and <code>price</code>. Bar plots highlight the impact of preferred area on pricing.</p>
       
         <div style="display: flex; justify-content: space-between;">
-      <img src="image1.png" alt="Image 1" width="45%" style="margin-right: 10px;">
-      <img src="image2.png" alt="Image 2" width="45%">
+      <img src="housing_datasetdataset_housing_histogram.png" alt="Histogram of Target Variable" width="45%" style="margin-right: 10px;">
+      <img src="housing_dataset/dataset_housing_correlation.png" alt="Correlation between the price and the area" width="45%">
     </div>
 
       <h2>5. Modeling</h2>
@@ -1986,40 +1986,206 @@ server <- function(input, output, session) {
       <p><strong>Data splitting: </strong>we have taken 70% of the data as training and 30% as testing</p>
       <h2>6. Results</h2>
       <p><strong>Metrics:</strong> Model performance metrics are as follows:</p>
-      <table>
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Linear Regression</th>
-            <th>Decison Tree</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>MSE</td>
-            <td>1433143816350.62</td>
-            <td>1839843662869.32</td>
-          </tr>
-          <tr>
-            <td>RMSE</td>
-            <td>1197139.85</td>
-            <td>1356408.37</td>
-          </tr>
-          <tr>
-            <td>R-squared</td>
-            <td>0.64</td>
-            <td>0.54</td>
-          </tr>
-        </tbody>
-      </table>
+      <style>
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0; /* Adds spacing around the table */
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 15px; /* Adds padding inside each cell */
+    text-align: center;
+  }
+  th {
+    background-color: #f4f4f4; /* Light gray background for headers */
+  }
+  tr:nth-child(even) {
+    background-color: #f9f9f9; /* Alternating row colors for better readability */
+  }
+</style>
+
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>Linear Regression</th>
+      <th>Decision Tree</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>MSE</td>
+      <td>1,433,143,816,350.62</td>
+      <td>1,839,843,662,869.32</td>
+    </tr>
+    <tr>
+      <td>RMSE</td>
+      <td>1,197,139.85</td>
+      <td>1,356,408.37</td>
+    </tr>
+    <tr>
+      <td>R-squared</td>
+      <td>0.64</td>
+      <td>0.54</td>
+    </tr>
+  </tbody>
+</table>
+
       <div style="display: flex; justify-content: space-between;">
-      <img src="image1.png" alt="Image 1" width="30%" style="margin-right: 10px;">
-      <img src="image2.png" alt="Image 2" width="30%" style="margin-right: 10px;">
-      <img src="image3.png" alt="Image 3" width="30%">
+      <img src="housing_dataset/dataset_housing_metrics" alt="Metrics" width="30%" style="margin-right: 10px;">
+      <img src="housing_dataset/dataset_housing_actual_vs_predicted.png" alt="Actuals vs Predictions" width="30%" style="margin-right: 10px;">
+      <img src="housing_dataset/dataset_housing_predicted_vs_residuals.png" alt="Residuals vs Predictions" width="30%">
     </div>
       <p><strong>Visualizations:</strong> Feature importance plots from Linear Regression reveal <code>bathrooms</code>,<code>hotwaterheating</code> and <code>airconditioning</code> as the top predictors.</p>
+     
+     <img src="housing_dataset/dataset_housing_feauture_importance.png" alt="Feauture Importance" width="500">
+      ')
+  })
+  
+  output$diabetes_diagnosis <- renderUI({
+    HTML('
+      <h1>📚 Study Case: Diabetes Diagnosis Dataset</h1>
+
+      <h2>1. Introduction</h2>
+      <p><strong>Objective:</strong> To analyze and model the diabetes diagnosis dataset to predict whether a person has diabetes based on clinical and personal attributes.</p>
+      <p><strong>Dataset Overview:</strong> The dataset contains information about patients, including age, gender, BMI, blood pressure, glucose levels, and whether they were diagnosed with diabetes.</p>
+       
+        <img src="diabetes_dataset/data_overview" alt="Dataset Overview" width="500">
+
+      <h2>2. Dataset Description</h2>
+      <p><strong>Summary:</strong> The dataset includes the following features:</p>
+      <ul>
+        <li><code>patientId</code>: Unique identifier for each patient.</li>
+        <li><code>age</code>: Age of the patient (numerical).</li>
+        <li><code>gender</code>: Gender of the patient (0 = female, 1 = male).</li>
+        <li><code>BMI</code>: Body Mass Index (numerical).</li>
+        <li><code>blood_pressure</code>: Blood pressure levels (numerical).</li>
+        <li><code>insuline</code>: Insulin levels (numerical).</li>
+        <li><code>glucose</code>: Glucose levels (numerical).</li>
+        <li><code>diabetesPedigreeFunction</code>: Genetic predisposition to diabetes (numerical).</li>
+        <li><code>outcome</code>: Target variable (0 = no diabetes, 1 = diabetes).</li>
+      </ul>
+      <p><strong>Exploratory Insights:</strong> Initial exploration reveals a strong correlation between high glucose levels, BMI, and the likelihood of diabetes. Patients with higher diabetes pedigree function values also show a higher chance of being diagnosed.</p>
+       
+       
+       <img src="diabetes_dataset/dataset_summary.png" alt="Dataset Description" width="500">
+       
+      <h2>3. Preprocessing</h2>
+      <p><strong>Steps Taken:</strong> Applied the following preprocessing steps:</p>
+      <ul>
+       <li> Dropping the feauture PatientID because it only represents the ID of the patient which is not pertinent feauture to train.</li>
+        <li>In this dataset does not contain any missing values </li>
+        <li>The feauture gender and outcome are already encoded.</li>
+        <li>Normalized numerical features like <code>BMI</code>, <code>glucose</code>, and <code>insuline</code> using log transformation.</li>
+      </ul>
+      <p><strong>Rationale:</strong> Preprocessing ensures the dataset is clean and ready for modeling, with consistent formats for numerical and categorical variables.</p>
+
+      <h2>4. Analysis</h2>
+      <h3>Univariate Analysis</h3>
+      <p>Generated histograms for numerical features like <code>glucose</code>, <code>BMI</code>, and <code>age</code>, and bar plots for categorical variables like <code>gender</code>.</p>
+     <h3>Bivariate Analysis</h3>
+   <p>The correlation matrix reveals key relationships among the numerical features in the dataset:</p>
+   <ul>
+    <li><code>glucose</code> and <code>outcome</code> show a strong positive correlation, indicating that higher glucose levels are strongly associated with diabetes diagnosis.</li>
+    <li><code>BMI</code> and <code>Insulin</code> also has a moderate positive correlation with <code>outcome</code>, suggesting that higher BMI and Insulin increases the likelihood of diabetes.</li>
+    <li>Features like <code>gender</code> and <code>blood_pressure</code> exhibit weaker correlations with <code>outcome</code>, but they still provide some predictive value.</li>
+  </ul>
+  <p>A heatmap of the correlation matrix highlights these relationships, with darker shades indicating stronger correlations. This analysis helps identify the most influential predictors for the diabetes diagnosis model.</p>
+  
+  <div style="display: flex; justify-content: space-between;">
+      <img src="diabetes_dataset/outcome_histogram.png" alt="Histogram of Target Variable" width="45%" style="margin-right: 10px;">
+      <img src="diabetes_dataset/corr_matrix.png" alt="Correlation Matrix" width="45%">
+    </div>
+
+  
+  
+      <h2>5. Modeling</h2>
+      <p><strong>Target Variable:</strong> <code>outcome</code>, a binary categorical variable indicating the presence or absence of diabetes.</p>
+      <p><strong>Selected Models:</strong> svm and Random Forest were chosen for classification.</p>
+      <p><strong>Evaluation Metrics:</strong> Metrics include accuracy, precision, recall,specitivity and F1 score, and the area under the ROC curve (AUC).</p>
+
+      <h2>6. Results</h2>
+      <p><strong>Metrics:</strong> Model performance metrics are as follows:</p>
+      <style>
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0; /* Adds spacing around the table */
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 15px; /* Adds padding inside each cell */
+    text-align: center;
+  }
+  th {
+    background-color: #f4f4f4; /* Light gray background for headers */
+  }
+  tr:nth-child(even) {
+    background-color: #f9f9f9; /* Alternating row colors for better readability */
+  }
+</style>
+
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>SVM</th>
+      <th>Random Forest</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Accuracy</td>
+      <td>48%</td>
+      <td>48%</td>
+    </tr>
+    <tr>
+      <td>Precision</td>
+      <td>50%</td>
+      <td>50%</td>
+    </tr>
+    <tr>
+      <td>Recall</td>
+      <td>50%</td>
+      <td>50%</td>
+    </tr>
+    <tr>
+      <td>F1 Score</td>
+      <td>48%</td>
+      <td>48%</td>
+    </tr>
+    <tr>
+      <td>AUC</td>
+      <td>0.46</td>
+      <td>0.51</td>
+    </tr>
+    <tr>
+      <td>Specificity</td>
+      <td>50%</td>
+      <td>50%</td>
+    </tr>
+  </tbody>
+</table>
+
+<div style="display: flex; justify-content: space-between;">
+      <img src="diabetes_dataset/metrics.png" alt="Metrics" width="30%" style="margin-right: 10px;">
+      <img src="diabetes_dataset/confusion_matrix.png" alt="Confusion Matrix" width="30%" style="margin-right: 10px;">
+      <img src="diabetes_dataset/roc_curve.png" alt="Roc curve" width="30%">
+    </div>     
+
+      <p><strong>Visualizations:</strong> The ROC curve indicates better performance for Random Forest with an AUC of 0.51 compared to SVM.</p>
+
+      <h2>7. Insights</h2>
+      <p><strong>Key Observations:</strong> High glucose levels and BMI significantly contribute to diabetes diagnosis. Gender does not show a substantial impact on the outcome.</p>
+      <p><strong>Limitations:</strong> The dataset does not include lifestyle factors like diet or physical activity, which could improve model predictions.</p>
+       
+       <img src="diabetes_dataset/feauture_importance" alt="Feauture_Importance" width=500>
+      
 
       
     ')
   })
+  
+  
 }

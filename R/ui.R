@@ -57,6 +57,10 @@ ui <- dashboardPage(
               tabPanel(
                 title = "Housing Prices",
                 htmlOutput("study_case_content")
+              ),
+              tabPanel(
+                title="Diabetes Diagnosis",
+                htmlOutput("diabetes_diagnosis")
               )
             )
           )
