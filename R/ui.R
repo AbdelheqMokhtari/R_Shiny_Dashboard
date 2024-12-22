@@ -55,7 +55,7 @@ ui <- dashboardPage(
             width = 12,
             tabsetPanel(
               tabPanel(
-                title = "Study Case",
+                title = "Housing Prices",
                 htmlOutput("study_case_content")
               )
             )
