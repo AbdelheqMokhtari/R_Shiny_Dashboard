@@ -720,24 +720,41 @@ server <- function(input, output, session) {
   
   # Mise à jour des choix pour les variables
   # Update variable selection choices
+  # Update variable selection choices for univariate and bivariate analysis
   observe({
     req(display_data())
     data <- display_data()
-    # Update univariate analysis selection
-    updateSelectInput(session, "x_variable", choices = names(data))
-    # Update bivariate analysis selections
-    updateSelectInput(session, "x_variable_bi", choices = names(data))
-    updateSelectInput(session, "y_variable", choices = names(data))
+    numeric_vars <- names(data)[sapply(data, is.numeric)]  # Only numeric variables for histograms
+    updateSelectInput(session, "x_variable", choices = numeric_vars)
+    updateSelectInput(session, "x_variable_bi", choices = names(data))  # Keep for bivariate analysis
+    updateSelectInput(session, "y_variable", choices = names(data))  # Keep for bivariate analysis
   })
   
-  # Unidimensional Analysis
-  # Histogram
+  # Unidimensional Analysis - Histogram with max bins set to 10
   output$histogram <- renderPlotly({
     req(display_data(), input$x_variable)
     data <- display_data()
-    plot_ly(data, x = ~get(input$x_variable), type = "histogram", autobinx = FALSE, 
-            xbins = list(size = input$binwidth_input))
+    
+    # Get the selected variable and its range
+    variable_data <- data[[input$x_variable]]
+    
+    # Ensure the variable is numeric
+    req(is.numeric(variable_data))
+    
+    # Calculate bin size to ensure a maximum of 10 bins
+    bin_range <- range(variable_data, na.rm = TRUE)
+    bin_width <- (bin_range[2] - bin_range[1]) / 10
+    
+    # Create histogram plot
+    plot_ly(data, x = ~get(input$x_variable), type = "histogram", autobinx = FALSE,
+            xbins = list(size = bin_width)) %>%
+      layout(
+        title = paste("Histogram of", input$x_variable),
+        xaxis = list(title = input$x_variable),
+        yaxis = list(title = "Count")
+      )
   })
+  
   
   # Boxplot
   output$boxplot <- renderPlotly({
@@ -1754,4 +1771,107 @@ server <- function(input, output, session) {
   })
   
   
+  
+  
+  
+  
+  ###Study case Text
+  
+  
+  ##  housing prices 
+    # Render the study case content
+    output$study_case_content <- renderUI({
+      HTML('
+      <h1>📚 Study Case: Housing Dataset</h1>
+
+      <h2>1. Introduction</h2>
+      <p><strong>Objective:</strong> To analyze and model the housing dataset to predict factors like price based on various attributes such as area, number of bedrooms, and locality.</p>
+      <p><strong>Dataset Overview:</strong> The dataset contains housing details, including size, price, location, and other features that can influence housing prices.</p>
+      
+      <img src="www/dataset_housing_description.png" alt="Dataset Overview" width="500">
+
+      <h2>2. Dataset Description</h2>
+      <p><strong>Summary:</strong> The dataset includes the following features:</p>
+      <ul>
+        <li><code>area</code>: Size of the house in square feet.</li>
+        <li><code>bedrooms</code>: Number of bedrooms in the house.</li>
+        <li><code>price</code>: Price of the house.</li>
+        <li><code>bathrooms</code>: Number of bathrooms in the house.</li>
+        <li><code>stories</code>: Number of stories.</li>
+        <li><code>mainroad</code>: Whether the house is near the main road (yes/no).</li>
+        <li><code>guestroom</code>: Presence of a guest room (yes/no).</li>
+        <li><code>basement</code>: Presence of a basement (yes/no).</li>
+        <li><code>hotwaterheating</code>: Availability of hot water heating (yes/no).</li>
+        <li><code>airconditioning</code>: Presence of air conditioning (yes/no).</li>
+        <li><code>parking</code>: Number of parking spaces.</li>
+        <li><code>prefarea</code>: Whether the house is in a preferred area (yes/no).</li>
+        <li><code>furnishingstatus</code>: Furnishing status of the house (furnished/semi-furnished/unfurnished).</li>
+      </ul>
+      
+      <img src="www/dataset_housing_summary.png" alt="Dataset Description" width="500">
+     
+
+      <h2>3. Preprocessing</h2>
+      <p><strong>Steps Taken:</strong> Applied the following preprocessing steps:</p>
+      <ul>
+        <li>Handled missing values in numerical columns like <code>area</code> by replacing them with the median.</li>
+        <li>Converted categorical variables like <code>mainroad</code> and <code>guestroom</code> to numerical using label encoding.</li>
+        <li>Normalized numerical features such as <code>price</code> and <code>area</code> using Min-Max scaling.</li>
+      </ul>
+      <p><strong>Rationale:</strong> Preprocessing ensures data consistency, handles missing values, and prepares the data for machine learning models.</p>
+
+      <h2>4. Analysis</h2>
+      <h3>Univariate Analysis</h3>
+      <p>Generated histograms for numerical features like <code>price</code> and <code>area</code>, and pie charts for categorical variables like <code>furnishingstatus</code>.</p>
+      <h3>Bivariate Analysis</h3>
+      <p>Scatter plots reveal strong positive correlations between <code>area</code> and <code>price</code>. Bar plots highlight the impact of preferred area on pricing.</p>
+      
+        <div style="display: flex; justify-content: space-between;">
+      <img src="image1.png" alt="Image 1" width="45%" style="margin-right: 10px;">
+      <img src="image2.png" alt="Image 2" width="45%">
+    </div>
+
+      <h2>5. Modeling</h2>
+      <p><strong>Target Variable:</strong> <code>price</code>, a continuous variable.</p>
+      <p><strong>Selected Models:</strong> Linear Regression and Decision Tree were chosen to predict housing prices.</p>
+      <p><strong>Evaluation Metrics:</strong> Metrics include Mean Squared Error (MSE), Root Mean Squared Error (RMSE), and R-squared.</p>
+      <p><strong>Data splitting: </strong>we have taken 70% of the data as training and 30% as testing</p>
+      <h2>6. Results</h2>
+      <p><strong>Metrics:</strong> Model performance metrics are as follows:</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Linear Regression</th>
+            <th>Decison Tree</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>MSE</td>
+            <td>1433143816350.62</td>
+            <td>1839843662869.32</td>
+          </tr>
+          <tr>
+            <td>RMSE</td>
+            <td>1197139.85</td>
+            <td>1356408.37</td>
+          </tr>
+          <tr>
+            <td>R-squared</td>
+            <td>0.64</td>
+            <td>0.54</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="display: flex; justify-content: space-between;">
+      <img src="image1.png" alt="Image 1" width="30%" style="margin-right: 10px;">
+      <img src="image2.png" alt="Image 2" width="30%" style="margin-right: 10px;">
+      <img src="image3.png" alt="Image 3" width="30%">
+    </div>
+      <p><strong>Visualizations:</strong> Feature importance plots from Linear Regression reveal <code>bathrooms</code>,<code>hotwaterheating</code> and <code>airconditioning</code> as the top predictors.</p>
+
+      
+    ')
+    })
 }
