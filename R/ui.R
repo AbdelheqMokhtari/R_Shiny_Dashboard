@@ -13,12 +13,12 @@ ui <- dashboardPage(
   dashboardSidebar(
     width = 200,
     sidebarMenu(
+      menuItem("Study case", tabName = "study_case", icon = icon("play-circle")),
       menuItem("Load Data", tabName = "load_data", icon = icon("file-upload", lib = "font-awesome")),
       menuItem("PreProcessing", tabName = "preprocessing", icon = icon("cogs")),
       menuItem("Analyse Data", tabName = "analyse_data", icon = icon("chart-line")),
       menuItem("ML Models", tabName = "ml_models", icon = icon("robot")),
       menuItem("Results", tabName = "results", icon = icon("chart-pie")),
-      menuItem("Implements", tabName = "implements", icon = icon("play-circle")),
       menuItem("About", tabName = "about", icon = icon("info-circle"))
     )
   ),
@@ -48,6 +48,119 @@ ui <- dashboardPage(
     ),
     useShinyjs(),  # Enable shinyjs
     tabItems(
+      tabItem(
+        tabName = "study_case",
+        fluidRow(
+          column(
+            width = 12,
+            tabsetPanel(
+              tabPanel(
+                title = "Housing Prices in California: Study Case",
+                tags$h3("Study Case Overview"),
+                tags$p("This study aims to predict house prices in California using a dataset containing 10 features. The target variable is the `median_house_value`. A linear regression model is employed to predict house prices."),
+                
+                tags$h3("Dataset Description"),
+                tags$ul(
+                  tags$li(tags$b("Features:"), " The dataset includes 10 features: 1 categorical and 9 numerical."),
+                  tags$li(tags$b("Target Variable:"), " `median_house_value` is a continuous numeric variable representing the house price."),
+                  tags$li(tags$b("Missing Data:"), " The feature `total_bedrooms` contains 1% missing values, which are handled during preprocessing."),
+                  tags$li(tags$b("Dataset Dimensions:"), " The dataset contains 20,641 rows.")
+                ),
+                
+                tags$h3("Preprocessing"),
+                tags$ul(
+                  tags$li(tags$b("Missing Data Handling:"), " Missing values in `total_bedrooms` are addressed using a chosen imputation method."),
+                  tags$li(tags$b("Feature Scaling:"), " Numerical features are scaled to ensure consistent model performance."),
+                  tags$li(tags$b("Categorical Encoding:"), " The categorical feature is encoded for compatibility with the regression model.")
+                ),
+                
+                tags$h3("Modeling"),
+                tags$ul(
+                  tags$li(tags$b("Model:"), " Linear regression is used to predict the `median_house_value`."),
+                  tags$li(tags$b("Data Split:"), " The dataset is split into 70% training and 30% testing subsets."),
+                  tags$li(tags$b("Training Process:"), " The model is trained on the training dataset and evaluated on the test dataset.")
+                ),
+                
+                tags$h3("Model Evaluation"),
+                tags$ul(
+                  tags$li(tags$b("Mean Squared Error (MSE):"), " 4,722,634,625.73"),
+                  tags$li(tags$b("Root Mean Squared Error (RMSE):"), " 68,721.43"),
+                  tags$li(tags$b("R-squared:"), " 0.64"),
+                  tags$li(tags$p("The model demonstrates a reasonable fit with an R-squared value of 0.64, indicating that 64% of the variance in house prices can be explained by the features."))
+                ),
+                
+                tags$h3("Insights and Observations"),
+                tags$ul(
+                  tags$li("The high RMSE suggests significant variability in house prices, possibly due to outliers or unmodeled factors."),
+                  tags$li("The moderate R-squared value highlights the importance of additional features or complex models to capture remaining variance."),
+                  tags$li("Imputation of missing values and feature scaling significantly improved model performance.")
+                ),
+                
+                tags$h3("Visualizations"),
+                
+                tags$h4("Model Predictions vs Actual Values"),
+                tags$img(src = "actual_vs_predictions.png", height = "300px", width = "500px"),
+                
+                tags$h4("Residuals Distribution"),
+                tags$img(src = "residuals_vs_predicted.png", height = "300px", width = "500px")
+                ),
+              tabPanel(
+                title = "Housing Prices in California: Study Case",
+                tags$h3("Study Case Overview"),
+                tags$p("This study aims to predict house prices in California using a dataset containing 10 features. The target variable is the `median_house_value`. A linear regression model is employed to predict house prices."),
+                
+                tags$h3("Dataset Description"),
+                tags$ul(
+                  tags$li(tags$b("Features:"), " The dataset includes 10 features: 1 categorical and 9 numerical."),
+                  tags$li(tags$b("Target Variable:"), " `median_house_value` is a continuous numeric variable representing the house price."),
+                  tags$li(tags$b("Missing Data:"), " The feature `total_bedrooms` contains 1% missing values, which are handled during preprocessing."),
+                  tags$li(tags$b("Dataset Dimensions:"), " The dataset contains 20,641 rows.")
+                ),
+                
+                tags$h3("Preprocessing"),
+                tags$ul(
+                  tags$li(tags$b("Missing Data Handling:"), " Missing values in `total_bedrooms` are addressed using a chosen imputation method."),
+                  tags$li(tags$b("Feature Scaling:"), " Numerical features are scaled to ensure consistent model performance."),
+                  tags$li(tags$b("Categorical Encoding:"), " The categorical feature is encoded for compatibility with the regression model.")
+                ),
+                
+                tags$h3("Modeling"),
+                tags$ul(
+                  tags$li(tags$b("Model:"), " Linear regression is used to predict the `median_house_value`."),
+                  tags$li(tags$b("Data Split:"), " The dataset is split into 70% training and 30% testing subsets."),
+                  tags$li(tags$b("Training Process:"), " The model is trained on the training dataset and evaluated on the test dataset.")
+                ),
+                
+                tags$h3("Model Evaluation"),
+                tags$ul(
+                  tags$li(tags$b("Mean Squared Error (MSE):"), " 4,722,634,625.73"),
+                  tags$li(tags$b("Root Mean Squared Error (RMSE):"), " 68,721.43"),
+                  tags$li(tags$b("R-squared:"), " 0.64"),
+                  tags$li(tags$p("The model demonstrates a reasonable fit with an R-squared value of 0.64, indicating that 64% of the variance in house prices can be explained by the features."))
+                ),
+                
+                tags$h3("Insights and Observations"),
+                tags$ul(
+                  tags$li("The high RMSE suggests significant variability in house prices, possibly due to outliers or unmodeled factors."),
+                  tags$li("The moderate R-squared value highlights the importance of additional features or complex models to capture remaining variance."),
+                  tags$li("Imputation of missing values and feature scaling significantly improved model performance.")
+                ),
+                
+                tags$h3("Visualizations"),
+                
+                tags$h4("Model Predictions vs Actual Values"),
+                tags$img(src = "actual_vs_predictions.png", height = "300px", width = "500px"),
+                
+                tags$h4("Residuals Distribution"),
+                tags$img(src = "residuals_vs_predicted.png", height = "300px", width = "500px")
+              )
+              )
+              
+            )
+          )
+        ),
+     
+      
       tabItem(
         tabName = "load_data",
         fluidRow(
@@ -446,7 +559,6 @@ ui <- dashboardPage(
             status = "primary",
             solidHeader = TRUE,
             width = 4,
-            actionButton("show_conf_matrix", "Show Confusion"), 
             plotOutput("conf_matrix_plot")  # Plot to display confusion matrix
           ),
           box(
@@ -455,8 +567,124 @@ ui <- dashboardPage(
             h4("AUC Score:"),
             textOutput("auc_score")
           )
+        ),
+        fluidRow(
+          box(
+            title="Feauture Importance",
+            status = "primary",
+            solidHeader = TRUE,
+            width = 12,
+            plotOutput("feature_importance_plot")
+            
+          )
         )
+      ),
+      tabItem("About", tabName = "about", icon = icon("info-circle"),
+               tabPanel("About",
+                        fluidPage(
+                          h2("Data Science Dashboard: Project README"),
+                          
+                          h3("Overview"),
+                          p("This Shiny application provides a comprehensive platform for data analysis, preprocessing, and machine learning model evaluation. The app is designed to handle end-to-end workflows, from loading datasets to training and evaluating machine learning models."),
+                          
+                          h3("Features"),
+                          tags$ul(
+                            tags$li("Data Loading: Upload datasets in CSV or Excel formats."),
+                            tags$li("Preprocessing: Handle missing values, scale numerical features, encode categorical variables, and manage outliers."),
+                            tags$li("Data Exploration: Perform univariate and bivariate analyses, including histograms, box plots, correlation plots, and advanced metrics."),
+                            tags$li("Machine Learning Models: Train, evaluate, and compare models like Linear Regression, Random Forest, Support Vector Machines (SVM), and Decision Trees."),
+                            tags$li("Results: Visualize model metrics, confusion matrices, ROC curves, and feature importance.")
+                          ),
+                          
+                          h3("Application Structure"),
+                          tags$ul(
+                            tags$li("Sidebar Menu"),
+                            tags$li("Study Case: Provides an overview of a case study (e.g., predicting California housing prices) with detailed preprocessing and model evaluation steps."),
+                            tags$li("Load Data: Allows users to upload datasets and explore their structure."),
+                            tags$li("Preprocessing: Offers tools for handling missing values, outliers, and feature transformations."),
+                            tags$li("Analyse Data: Enables univariate and bivariate analyses using various visualizations."),
+                            tags$li("ML Models: Facilitates model selection, parameter tuning, and training."),
+                            tags$li("Results: Displays metrics and visualizations for trained models."),
+                            tags$li("About: Contains project details and acknowledgments.")
+                          ),
+                          
+                          h3("Detailed Features"),
+                          h4("1. Study Case"),
+                          tags$ul(
+                            tags$li("Overview: Introduces the problem and dataset."),
+                            tags$li("Dataset Description: Details the features, target variable, and missing data."),
+                            tags$li("Preprocessing: Summarizes methods like scaling and encoding."),
+                            tags$li("Modeling: Describes the model training process and evaluation metrics."),
+                            tags$li("Insights: Highlights observations and model performance insights.")
+                          ),
+                          
+                          h4("2. Load Data"),
+                          p("The Load Data section allows users to upload and explore datasets. The key functionalities include:"),
+                          tags$ul(
+                            tags$li(HTML("File Upload: Supports CSV and Excel files. <br> For Excel files, the app checks for a specific sheet named 'Data.' <br> Displays error notifications for unsupported file types or missing sheets.")),
+                            tags$li("File Details:Displays metadata such as file name, format, number of instances (rows), features (columns), and counts of categorical and numerical features."),
+                            tags$li("Dataset Exploration: Provides a scrollable and searchable table view of the uploaded dataset.Displays a summary of each column, including type (numerical or categorical), missing values, and statistical measures like mean, median, and standard deviation."),
+                            tags$li("Feature Management: Drop Feautures: Dynamically select and remove specific features (columns) from the dataset."),
+                            tags$li("Convert Features: Converts selected numerical variables to categorical or vice versa.")
+                          ),
+                          
+                          h4("3. Preprocessing"),
+                          p("The Preprocessing section provides advanced tools for cleaning and preparing the dataset:"),
+                          tags$ul(
+                            tags$li("Handling Missing Values: Options include suppression, replacing with mode, median, or mean."),
+                            tags$li("Managing Outliers: Detects outliers using the IQR method, with options to remove or replace outliers."),
+                            tags$li("Data Transformation: Offers methods like Min-Max Scaling, Z-Score Normalization, and Log Transformation."),
+                            tags$li("Data Encoding: Options for Label Encoding and One-Hot Encoding for categorical variables.")
+                          ),
+                          
+                          h4("4. Analyse Data"),
+                          p("The Analyse Data section provides tools for univariate and bivariate analysis:"),
+                          tags$ul(
+                            tags$li("Univariate Analysis: Includes histograms, box plots, pie charts, and summary statistics."),
+                            tags$li("Bivariate Analysis: Includes correlation plots, correlation matrices, and parallel box plots."),
+                            tags$li("Contingency Tables & Cramér's V: Summarize relationships between categorical variables.")
+                          ),
+                          
+                          h4("5. ML Models"),
+                          p("The ML Models section offers extensive capabilities for training and evaluating machine learning models:"),
+                          tags$ul(
+                            tags$li("Target Variable Selection: Dynamically select the target variable and handle missing values."),
+                            tags$li("Resampling Techniques: Includes undersampling and oversampling methods."),
+                            tags$li("Model Selection: Offers models based on the target variable type, with configurable parameters."),
+                            tags$li("Model Training: Supports multiple models, including SVM, Random Forest, Linear Regression, and Decision Trees.")
+                          ),
+                          
+                          h4("6. Results"),
+                          p("The Results section shows model metrics and visualizations:"),
+                          tags$ul(
+                            tags$li("Model Metrics: Includes accuracy, precision, recall, F1 score for classification models, and MSE, RMSE for regression models."),
+                            tags$li("Confusion Matrix: Visualizes predictions vs. actual values."),
+                            tags$li("ROC Curve: Plots ROC curves with AUC scores."),
+                            tags$li("Feature Importance: Displays the most important features contributing to model predictions.")
+                          ),
+                          
+                          h3("How to Use"),
+                          tags$ul(
+                            tags$li("Start the App: Run the application using `shiny::runApp('path_to_app')`."),
+                            tags$li("Upload Data: Navigate to 'Load Data' to upload your dataset."),
+                            tags$li("Preprocess Data: Use 'Preprocessing' to clean and prepare the data."),
+                            tags$li("Analyze Data: Explore patterns and relationships under 'Analyse Data.'"),
+                            tags$li("Train Models: In 'ML Models,' select and train a model."),
+                            tags$li("View Results: Check 'Results' for metrics and visualizations.")
+                          ),
+                          
+                          h3("Technical Details"),
+                          p("Libraries Used: shiny, shinydashboard, bslib, shinyjs, DT, plotly, ggplot2, randomForest, caret, e1071, rpart."),
+                          
+                          h3("System Requirements"),
+                          p("R Version: 4.0 or higher. Ensure all required libraries are installed."),
+                          
+                          h3("Acknowledgments"),
+                          p("This project is designed for educational purposes to demonstrate the application of data preprocessing, exploratory data analysis, and machine learning workflows using R Shiny.")
+                        )
+               )
       )
+      
     )
   )
 )

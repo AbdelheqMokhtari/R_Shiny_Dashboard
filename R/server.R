@@ -1382,7 +1382,7 @@ server <- function(input, output, session) {
       # Categorical or ordinal numeric
       updateSelectInput(session, "model_choice", 
                         choices = c("SVM", "Random Forest"), 
-                        selected = "SVM")
+                        selected = "Random Forest")
     } else if (is_continuous) {
       # Continuous numeric
       updateSelectInput(session, "model_choice", 
