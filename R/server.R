@@ -172,14 +172,14 @@ server <- function(input, output, session) {
   # Dynamically update dropdown options
   observe({
     current_data <- display_data()
-  
+    
     numerical_vars <- names(current_data)[sapply(current_data, is.numeric)]
     categorical_vars <- names(current_data)[sapply(current_data, function(x) is.factor(x) || is.character(x))]
-  
+    
     updateSelectInput(session, "num_to_cat", choices = numerical_vars, selected = NULL)
     updateSelectInput(session, "cat_to_num", choices = categorical_vars, selected = NULL)
   })
-
+  
   # Convert Numerical to Categorical
   observeEvent(input$apply_num_to_cat, {
     req(input$num_to_cat)  # Ensure input is not empty
@@ -210,7 +210,7 @@ server <- function(input, output, session) {
       footer = modalButton("OK")
     ))
   })
-
+  
   # Convert Categorical to Numerical
   observeEvent(input$apply_cat_to_num, {
     req(input$cat_to_num)  # Ensure input is not empty
@@ -365,12 +365,12 @@ server <- function(input, output, session) {
     })
   })
   
-    
+  
   # Dynamic selection for outliers
   output$outlier_var_ui <- renderUI({
     req(display_data())
     numeric_vars <- names(display_data())[sapply(display_data(), is.numeric)]
-      
+    
     if (length(numeric_vars) > 0) {
       selectInput(
         inputId = "outlier_var", 
@@ -382,15 +382,15 @@ server <- function(input, output, session) {
       tags$p("No numerical variables available for outlier handling.", style = "color: red;")
     }
   })
-    
+  
   observeEvent(input$apply_outliers, {
     req(input$outlier_var, input$outlier_method, display_data(), training_data())
-      
+    
     # Retrieve both datasets
     displayed <- display_data()
     training <- training_data()
     var <- input$outlier_var
-      
+    
     if (is.numeric(displayed[[var]])) {
       # Detect outliers using the IQR method
       iqr <- IQR(displayed[[var]], na.rm = TRUE)
@@ -398,11 +398,11 @@ server <- function(input, output, session) {
       q3 <- quantile(displayed[[var]], 0.75, na.rm = TRUE)
       lower_bound <- q1 - 1.5 * iqr
       upper_bound <- q3 + 1.5 * iqr
-        
+      
       # Identify outliers
       outliers <- which(displayed[[var]] < lower_bound | displayed[[var]] > upper_bound)
       outlier_count <- length(outliers)
-        
+      
       if (outlier_count > 0) {
         if (input$outlier_method == "Remove Outliers") {
           # Remove outliers from both datasets
@@ -419,11 +419,11 @@ server <- function(input, output, session) {
           displayed[[var]][outliers] <- mean_val
           training[[var]][outliers] <- mean_val
         }
-          
+        
         # Update the reactive datasets
         display_data(displayed)  # Correct way to update a reactive value
         training_data(training)  # Correct way to update a reactive value
-          
+        
         # Show a modal message summarizing the changes
         showModal(
           modalDialog(
@@ -539,12 +539,12 @@ server <- function(input, output, session) {
     req(training_data())
     req(input$encoding_var)
     req(input$encoding_method)
-  
+    
     # Get the training data and selected variables
     data <- training_data()
     selected_vars <- input$encoding_var
     encoded_vars <- list()
-  
+    
     for (var in selected_vars) {
       if (input$encoding_method == "Label Encoding") {
         data[[var]] <- as.integer(as.factor(data[[var]]))
@@ -557,13 +557,13 @@ server <- function(input, output, session) {
         encoded_vars[[var]] <- "One-Hot Encoding"
       }
     }
-  
+    
     # Update the dataset with the encoding applied
     training_data(data)
-  
+    
     # Show notification
     showNotification("Encoding applied successfully!", type = "message")
-  
+    
     # Prepare the encoding message
     if (length(encoded_vars) == 1) {
       var_list <- paste(names(encoded_vars), collapse = ", ")
@@ -572,7 +572,7 @@ server <- function(input, output, session) {
       var_list <- paste(names(encoded_vars), collapse = ", ")
       encoding_msg <- paste(encoded_vars[[1]], "applied in the following variables:", var_list)
     }
-  
+    
     # Show modal dialog with encoded variables
     showModal(
       modalDialog(
@@ -583,7 +583,7 @@ server <- function(input, output, session) {
       )
     )
   })
-
+  
   ## Submit button 
   
   observeEvent(input$submit_data, {
@@ -1328,6 +1328,16 @@ server <- function(input, output, session) {
   )
   
   observeEvent(input$split_data, {
+    if (is.null(y())) {
+      showModal(modalDialog(
+        title = "Missing Target Variable",
+        "You should select a target variable before splitting your data.",
+        easyClose = TRUE,
+        footer = modalButton("OK")
+      ))
+      return()
+    }
+    
     req(training_data(), y())
     
     data <- training_data()
@@ -1370,7 +1380,7 @@ server <- function(input, output, session) {
           Test_Distribution = table(splits$test_target)
         )
       })
-  
+      
       
       output$split_message <- renderText({
         paste(
@@ -1409,7 +1419,7 @@ server <- function(input, output, session) {
     }
   })
   
-
+  
   observe({
     req(y())  # Ensure the target variable is available
     
@@ -1423,8 +1433,8 @@ server <- function(input, output, session) {
     if (is_categorical || is_ordinal) {
       # Categorical or ordinal numeric
       updateSelectInput(session, "model_choice", 
-                        choices = c("SVM", "Random Forest"), 
-                        selected = "SVM")
+                        choices = c("Random Forest", "SVM"), 
+                        selected = "Random Forest")
     } else if (is_continuous) {
       # Continuous numeric
       updateSelectInput(session, "model_choice", 
@@ -1441,6 +1451,21 @@ server <- function(input, output, session) {
   
   observeEvent(input$train_model, {
     req(splits, input$model_choice)
+    
+    # Check if splits are defined
+    if (is.null(splits) || is.null(splits$train_data)) {
+      showModal(
+        modalDialog(
+          title = "Error",
+          "You must split your data before training the model.",
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        )
+      )
+      return()
+    }
+    
+    output$model_message <- renderText("Training in progress... Please wait.")
     
     data <- NULL
     target <- NULL
@@ -1568,11 +1593,14 @@ server <- function(input, output, session) {
     rmse <- sqrt(mean((test_target - predictions)^2))
     mse <- mean((test_target - predictions)^2)
     r2 <- 1 - sum((test_target - predictions)^2) / sum((test_target - mean(test_target))^2)
+    n <- length(test_target)
+    p <- length(coefficients(model)) - 1
+    adjusted_r2 <- 1 - (1 - r2) * (n - 1) / (n - p - 1)
     
     # Return metrics as a data frame
     data.frame(
-      Metric = c("RMSE", "MSE", "R²"),
-      Value = c(rmse, mse, r2)
+      Metric = c("RMSE", "MSE", "R²", "Adjusted R²"),
+      Value = c(rmse, mse, r2, adjusted_r2)
     )
   }
   
@@ -1596,20 +1624,24 @@ server <- function(input, output, session) {
     accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
     precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
     recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+    specificity <- (sum(confusion_matrix) - colSums(confusion_matrix) - rowSums(confusion_matrix) + diag(confusion_matrix)) / 
+      (sum(confusion_matrix) - colSums(confusion_matrix))
     f1_score <- 2 * (precision * recall) / (precision + recall)
     
     # Handle potential NA values (e.g., no predictions for certain classes)
     precision[is.na(precision)] <- 0
     recall[is.na(recall)] <- 0
     f1_score[is.na(f1_score)] <- 0
+    specificity[is.na(specificity)] <- 0
     
     # Return metrics as a data frame
     data.frame(
-      Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+      Metric = c("Accuracy", "Precision", "Recall","Specificity",  "F1 Score"),
       Value = c(
         accuracy, 
         mean(precision, na.rm = TRUE), 
         mean(recall, na.rm = TRUE), 
+        mean(specificity, na.rm = TRUE), 
         mean(f1_score, na.rm = TRUE)
       )
     )
@@ -1642,7 +1674,7 @@ server <- function(input, output, session) {
   })
   
   ## Confusion Matrix & Plot (Predicted & Actual)
-
+  
   # Dynamic title logic
   output$dynamic_title <- renderText({
     req(input$model_choice)
@@ -1846,8 +1878,21 @@ server <- function(input, output, session) {
   output$importance_plot <- renderPlot({
     # Check if the model is trained
     req(reactive_model)
+    if (input$model_choice == "SVM") {
+      # Display a message for SVM importance not applicable
+      plot.new()
+      title(main = "SVM Feature Importance")
+      text(0.5, 0.5, "SVM doesn't have a way to calculate\nfeature importance", cex = 1.2)
+    }
     
-    # Plot the feature importance for other models
+    if (input$model_choice == "Decision Tree") {
+      # Display a message for Decision Tree importance not implemented yet
+      plot.new()
+      title(main = "Decision Tree Feature Importance")
+      text(0.5, 0.5, "Feature importance for Decision Tree\nisn't implemented yet", cex = 1.2)
+    }
+    
+    # Check model choice
     if (!is.null(feature_importance$data)) {
       if (input$model_choice == "Random Forest") {
         # Extract feature importance from Random Forest model
@@ -1871,22 +1916,10 @@ server <- function(input, output, session) {
                 cex.names = 0.8, 
                 names.arg = names(feature_importance$data), 
                 horiz = TRUE)
-      } else if (input$model_choice == "Decision Tree") {
-        # Decision Tree feature importance
-        # Using caret's varImp function for rpart model
-        # imp <- caret::varImp(reactive_model, scale = FALSE)
-        # feature_importance$data <- imp$importance[,1]
-        
-        barplot(feature_importance$data, 
-                main = "Decision Tree Feature Importance", 
-                col = "lightcoral", 
-                las = 2, 
-                cex.names = 0.8, 
-                names.arg = names(feature_importance$data), 
-                horiz = TRUE)
       }
     }
   })
+  
   
   
   

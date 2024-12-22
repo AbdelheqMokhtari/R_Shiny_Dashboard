@@ -411,7 +411,7 @@ ui <- dashboardPage(
             conditionalPanel(
               condition = "input.model_choice == 'SVM'",
               numericInput("svm_C", "Parameter C:", value = 0.01, min = 0.001, step = 0.001),
-              selectInput("svm_kernel", "Kernel Type:", choices = c("linear", "polynomial", "rbf"), selected = "linear")
+              selectInput("svm_kernel", "Kernel Type:", choices = c("linear", "polynomial"), selected = "linear")
             ),
             conditionalPanel(
               condition = "input.model_choice == 'Random Forest'",
