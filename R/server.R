@@ -721,39 +721,64 @@ server <- function(input, output, session) {
   # Mise à jour des choix pour les variables
   # Update variable selection choices
   # Update variable selection choices for univariate and bivariate analysis
+  # Update variable selection choices for univariate and bivariate analysis
   observe({
     req(display_data())
     data <- display_data()
-    numeric_vars <- names(data)[sapply(data, is.numeric)]  # Only numeric variables for histograms
-    updateSelectInput(session, "x_variable", choices = numeric_vars)
-    updateSelectInput(session, "x_variable_bi", choices = names(data))  # Keep for bivariate analysis
-    updateSelectInput(session, "y_variable", choices = names(data))  # Keep for bivariate analysis
+    
+    # Get numeric and categorical variables
+    numeric_vars <- names(data)[sapply(data, is.numeric)]  # Numeric variables for histograms
+    categorical_vars <- names(data)[sapply(data, function(x) is.factor(x) || is.character(x) || 
+                                             (is.numeric(x) && length(unique(x)) <= 10))]  # Categorical variables
+    
+    # Combine numeric and categorical variables
+    all_vars <- unique(c(numeric_vars, categorical_vars))
+    
+    updateSelectInput(session, "x_variable", choices = all_vars)
+    updateSelectInput(session, "x_variable_bi", choices = names(data))  # For bivariate analysis
+    updateSelectInput(session, "y_variable", choices = names(data))  # For bivariate analysis
   })
   
-  # Unidimensional Analysis - Histogram with max bins set to 10
+  # Unidimensional Analysis - Histogram or Bar plot
   output$histogram <- renderPlotly({
     req(display_data(), input$x_variable)
     data <- display_data()
     
-    # Get the selected variable and its range
+    # Get the selected variable
     variable_data <- data[[input$x_variable]]
     
-    # Ensure the variable is numeric
-    req(is.numeric(variable_data))
-    
-    # Calculate bin size to ensure a maximum of 10 bins
-    bin_range <- range(variable_data, na.rm = TRUE)
-    bin_width <- (bin_range[2] - bin_range[1]) / 10
-    
-    # Create histogram plot
-    plot_ly(data, x = ~get(input$x_variable), type = "histogram", autobinx = FALSE,
-            xbins = list(size = bin_width)) %>%
-      layout(
-        title = paste("Histogram of", input$x_variable),
-        xaxis = list(title = input$x_variable),
-        yaxis = list(title = "Count")
-      )
+    # Check if the variable is numeric or categorical
+    if (is.numeric(variable_data)) {
+      # If numeric, create a histogram
+      bin_range <- range(variable_data, na.rm = TRUE)
+      bin_width <- (bin_range[2] - bin_range[1]) / 10
+      
+      plot_ly(data, x = ~get(input$x_variable), type = "histogram", autobinx = FALSE,
+              xbins = list(size = bin_width)) %>%
+        layout(
+          title = paste("Histogram of", input$x_variable),
+          xaxis = list(title = input$x_variable),
+          yaxis = list(title = "Count")
+        )
+    } else if (is.factor(variable_data) || is.character(variable_data) || 
+               (is.numeric(variable_data) && length(unique(variable_data)) <= 10)) {
+      # If categorical, create a bar plot
+      category_counts <- as.data.frame(table(variable_data))
+      colnames(category_counts) <- c("Category", "Count")  # Rename columns for clarity
+      
+      plot_ly(category_counts, x = ~Category, y = ~Count, type = "bar", 
+              marker = list(line = list(width = 2, color = 'rgb(255, 255, 255)'))) %>%
+        layout(
+          title = paste("Bar Plot of", input$x_variable),
+          xaxis = list(title = input$x_variable, tickangle = 45),
+          yaxis = list(title = "Count"),
+          barmode = "group"
+        )
+    }
   })
+  
+  
+  
   
   
   # Boxplot
