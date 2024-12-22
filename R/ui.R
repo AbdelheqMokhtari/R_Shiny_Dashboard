@@ -62,8 +62,6 @@ ui <- dashboardPage(
           )
         )
       ),
-     
-      
       tabItem(
         tabName = "load_data",
         fluidRow(
@@ -454,31 +452,34 @@ ui <- dashboardPage(
             status = "primary",
             solidHeader = TRUE,
             width = 4,
-            actionButton("show_results", "Show Results"),  # Button to trigger results
+            height = "400px",
             tableOutput("model_metrics")  # Table to display metrics
           ),
           box(
-            title = "Confusion Matrix",
+            title = textOutput("dynamic_title"),  # Dynamic title
             status = "primary",
             solidHeader = TRUE,
             width = 4,
-            plotOutput("conf_matrix_plot")  # Plot to display confusion matrix
+            height = "400px",
+            plotOutput("conf_matrix_plot")  # Plot to display confusion matrix or visualization
           ),
           box(
-            title = "ROC Curve", status = "primary", solidHeader = TRUE, width = 4,
+            title = textOutput("Roc_Residual"),
+            status = "primary",
+            solidHeader = TRUE,
+            width = 4,
             plotOutput("roc_curve"),
-            h4("AUC Score:"),
-            textOutput("auc_score")
+            height = "400px"
           )
         ),
         fluidRow(
+          # Box for Feature Importance Plot
           box(
-            title="Feauture Importance",
-            status = "primary",
+            title = "Feature Importance",
+            status = "success",
             solidHeader = TRUE,
             width = 12,
-            plotOutput("feature_importance_plot")
-            
+            plotOutput("importance_plot")
           )
         )
       ),
