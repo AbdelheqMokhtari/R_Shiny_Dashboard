@@ -1936,7 +1936,14 @@ server <- function(input, output, session) {
       <p><strong>Objective:</strong> To analyze and model the housing dataset to predict factors like price based on various attributes such as area, number of bedrooms, and locality.</p>
       <p><strong>Dataset Overview:</strong> The dataset contains housing details, including size, price, location, and other features that can influence housing prices.</p>
       
-      <img src="housing_dataset/dataset_housing_description.png" alt="Dataset Overview" width="500">
+      <div style="text-align: center;">
+  <a href="https://ibb.co/q7hN25r">
+    <img src="https://i.ibb.co/HBRt9dH/dataset-housing-description.png" 
+         alt="Dataset Overview" width="600" height="200" />
+  </a>
+</div>
+
+
 
       <h2>2. Dataset Description</h2>
       <p><strong>Summary:</strong> The dataset includes the following features:</p>
@@ -1956,8 +1963,12 @@ server <- function(input, output, session) {
         <li><code>furnishingstatus</code>: Furnishing status of the house (furnished/semi-furnished/unfurnished).</li>
       </ul>
       
-      <img src="housing_dataset/dataset_housing_summary.png" alt="Dataset Description" width="500">
-     
+     <div style="text-align: center;">
+  <a href="https://ibb.co/Xpd7YVw">
+    <img src="https://i.ibb.co/82RrYXh/dataset-housing-summary.png" alt="Dataset summary" border="0" />
+  </a>
+</div>
+
 
       <h2>3. Preprocessing</h2>
       <p><strong>Steps Taken:</strong> Applied the following preprocessing steps:</p>
@@ -1975,8 +1986,8 @@ server <- function(input, output, session) {
       <p>Scatter plots reveal strong positive correlations between <code>area</code> and <code>price</code>. Bar plots highlight the impact of preferred area on pricing.</p>
       
         <div style="display: flex; justify-content: space-between;">
-      <img src="housing_datasetdataset_housing_histogram.png" alt="Histogram of Target Variable" width="45%" style="margin-right: 10px;">
-      <img src="housing_dataset/dataset_housing_correlation.png" alt="Correlation between the price and the area" width="45%">
+      <a href="https://ibb.co/kH7cq71"><img src="https://i.ibb.co/X2QJFQ8/dataset-housing-histogram.png" alt="histogram of the target variable" width="80%" border="0" style="margin-right: 10px;"></a> 
+      <a href="https://ibb.co/tPM0GRC"><img src="https://i.ibb.co/2Y7z9JK/dataset-housing-correlation.png" alt="dataset-housing-correlation" border="0" width="80%"/></a> 
     </div>
 
       <h2>5. Modeling</h2>
@@ -2033,13 +2044,19 @@ server <- function(input, output, session) {
 </table>
 
       <div style="display: flex; justify-content: space-between;">
-      <img src="housing_dataset/dataset_housing_metrics" alt="Metrics" width="30%" style="margin-right: 10px;">
-      <img src="housing_dataset/dataset_housing_actual_vs_predicted.png" alt="Actuals vs Predictions" width="30%" style="margin-right: 10px;">
-      <img src="housing_dataset/dataset_housing_predicted_vs_residuals.png" alt="Residuals vs Predictions" width="30%">
+      <a href="https://imgbb.com/"><img src="https://i.ibb.co/gvtchBF/dataset-housing-metrics.png" alt="Metrics" border="0"  width="80%" style="margin-right: 10px;" /></a>
+      <a href="https://imgbb.com/"><img src="https://i.ibb.co/k2x84hT/dataset-housing-actual-vs-predicted.png" alt="Actuals vs Predictions" border="0"  width="80%" style="margin-right: 10px;"/></a>
+      <a href="https://imgbb.com/"><img src="https://i.ibb.co/6D8mWSJ/dataset-housing-predicted-vs-residuals.png" alt="Residuals vs Predictions" border="0" width="80%" /></a>
     </div>
-      <p><strong>Visualizations:</strong> Feature importance plots from Linear Regression reveal <code>bathrooms</code>,<code>hotwaterheating</code> and <code>airconditioning</code> as the top predictors.</p>
+      <p><strong>Visualizations:</strong> Feature importance plots from Linear Regression reveal <code>area</code> and <code>bathrooms</code> as the top predictors.</p>
      
-     <img src="housing_dataset/dataset_housing_feauture_importance.png" alt="Feauture Importance" width="500">
+    <div style="text-align: center;">
+  <a href="https://ibb.co/hdDt6KF">
+    <img src="https://i.ibb.co/vdZKFJ4/dataset-housing-feauture-importance.png" 
+         alt="Feature Importance" border="0" width="400" height="200" />
+  </a>
+</div>
+
       ')
   })
   
@@ -2050,8 +2067,9 @@ server <- function(input, output, session) {
       <h2>1. Introduction</h2>
       <p><strong>Objective:</strong> To analyze and model the diabetes diagnosis dataset to predict whether a person has diabetes based on clinical and personal attributes.</p>
       <p><strong>Dataset Overview:</strong> The dataset contains information about patients, including age, gender, BMI, blood pressure, glucose levels, and whether they were diagnosed with diabetes.</p>
-       
-        <img src="diabetes_dataset/data_overview" alt="Dataset Overview" width="500">
+         <div style="text-align: center;">
+        <a href="https://ibb.co/m0nH0Hv"><img src="https://i.ibb.co/ZSQhShH/data-overview.png" alt="Datset Overview" width="700" height="200" border="0" /></a>
+        </div>
 
       <h2>2. Dataset Description</h2>
       <p><strong>Summary:</strong> The dataset includes the following features:</p>
@@ -2069,7 +2087,10 @@ server <- function(input, output, session) {
       <p><strong>Exploratory Insights:</strong> Initial exploration reveals a strong correlation between high glucose levels, BMI, and the likelihood of diabetes. Patients with higher diabetes pedigree function values also show a higher chance of being diagnosed.</p>
        
        
-       <img src="diabetes_dataset/dataset_summary.png" alt="Dataset Description" width="500">
+      <div style="text-align: center;">
+        <a href="https://ibb.co/1rwPf5S"><img src="https://i.ibb.co/Lx2czWG/data-summary.png" alt="Datset Summary" width="700" height="200" border="0" /></a>
+        </div>
+       
        
       <h2>3. Preprocessing</h2>
       <p><strong>Steps Taken:</strong> Applied the following preprocessing steps:</p>
@@ -2093,12 +2114,12 @@ server <- function(input, output, session) {
   </ul>
   <p>A heatmap of the correlation matrix highlights these relationships, with darker shades indicating stronger correlations. This analysis helps identify the most influential predictors for the diabetes diagnosis model.</p>
   
-  <div style="display: flex; justify-content: space-between;">
-      <img src="diabetes_dataset/outcome_histogram.png" alt="Histogram of Target Variable" width="45%" style="margin-right: 10px;">
-      <img src="diabetes_dataset/corr_matrix.png" alt="Correlation Matrix" width="45%">
+ 
+ <div style="display: flex; justify-content: space-between;">
+      <a href="https://ibb.co/WPvFGmy"><img src="https://i.ibb.co/qWY97Ts/outcome-histogram.png" alt="histogram of the target variable" width="80%" border="0" style="margin-right: 10px;"></a> 
+      <a href="https://ibb.co/1s5SfL8"><img src="https://i.ibb.co/5Yy7W6B/corr-matrix.png" alt="Correlation Matrix" border="0" width="80%"/></a> 
     </div>
-
-  
+    
   
       <h2>5. Modeling</h2>
       <p><strong>Target Variable:</strong> <code>outcome</code>, a binary categorical variable indicating the presence or absence of diabetes.</p>
@@ -2168,11 +2189,14 @@ server <- function(input, output, session) {
   </tbody>
 </table>
 
-<div style="display: flex; justify-content: space-between;">
-      <img src="diabetes_dataset/metrics.png" alt="Metrics" width="30%" style="margin-right: 10px;">
-      <img src="diabetes_dataset/confusion_matrix.png" alt="Confusion Matrix" width="30%" style="margin-right: 10px;">
-      <img src="diabetes_dataset/roc_curve.png" alt="Roc curve" width="30%">
-    </div>     
+    <div style="display: flex; justify-content: space-between;">
+       <a href="https://imgbb.com/"><img src="https://i.ibb.co/Wyw33vc/metrics.png" alt="Metrics" border="0" width="80%" style="margin-right: 10px;"/></a>   
+      <a href="https://imgbb.com/"><img src="https://i.ibb.co/xhHVjQB/confusion-matrix.png" alt="confusion-matrix" border="0" width="80%" style="margin-right: 10px;" /></a>
+       <a href="https://imgbb.com/"><img src="https://i.ibb.co/qdj8fnn/roc-curve.png" alt="Roc curve" border="0" width="80%" /></a>
+    </div> 
+    
+   
+    
 
       <p><strong>Visualizations:</strong> The ROC curve indicates better performance for Random Forest with an AUC of 0.51 compared to SVM.</p>
 
@@ -2180,8 +2204,10 @@ server <- function(input, output, session) {
       <p><strong>Key Observations:</strong> High glucose levels and BMI significantly contribute to diabetes diagnosis. Gender does not show a substantial impact on the outcome.</p>
       <p><strong>Limitations:</strong> The dataset does not include lifestyle factors like diet or physical activity, which could improve model predictions.</p>
        
-       <img src="diabetes_dataset/feauture_importance" alt="Feauture_Importance" width=500>
-      
+       
+       <div style="text-align: center;">
+       <a href="https://ibb.co/CvqfNrj"><img src="https://i.ibb.co/gwGxHn0/feauture-importance.png" alt="Feauture Importance" border="0" width="800" height="300" /></a>
+      </div>
 
       
     ')

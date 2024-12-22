@@ -786,6 +786,12 @@ ui <- dashboardPage(
 <h3>Acknowledgments</h3>
 <p>This project is designed for educational purposes to demonstrate the application of data preprocessing, exploratory data analysis, and machine learning workflows using R Shiny.</p>
 
+<h3>Contributors</h3>
+<ul>
+  <li>Abdelheq Mokhtari </li>
+  <li>Mohamed Raouf Razi</li>
+  <li>Akram Chaabnia</li>
+</ul>
           ')
             )
           )
