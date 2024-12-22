@@ -1399,7 +1399,7 @@ server <- function(input, output, session) {
       # Categorical or ordinal numeric
       updateSelectInput(session, "model_choice", 
                         choices = c("SVM", "Random Forest"), 
-                        selected = "Random Forest")
+                        selected = "SVM")
     } else if (is_continuous) {
       # Continuous numeric
       updateSelectInput(session, "model_choice", 
@@ -1412,6 +1412,7 @@ server <- function(input, output, session) {
   
   # Train Model
   reactive_metrics <- reactiveValues(data = NULL)
+  feature_importance <- reactiveValues(data = NULL)
   
   observeEvent(input$train_model, {
     req(splits, input$model_choice)
@@ -1425,53 +1426,80 @@ server <- function(input, output, session) {
       req(splits$train_data, splits$train_target)  # Ensure Holdout split is ready
       data <- splits$train_data
       target <- splits$train_target
+      
       # Train the model based on the selected model choice
       if (input$model_choice == "SVM") {
+        
+        # Ensure the target is treated as a factor for classification tasks
+        if (!is.factor(target)) {
+          target <- as.factor(target)
+        }
+        
         req(input$svm_C, input$svm_kernel)
         
-        # Train SVM model
+        # Train SVM model for classification
         model <- e1071::svm(
           x = data,
           y = target,
           cost = input$svm_C,
-          kernel = input$svm_kernel
+          kernel = input$svm_kernel,
+          type = ifelse(is.factor(target), "C-classification", "eps-regression"),
+          probability = TRUE  # Classification vs. Regression
         )
+        
+        # Since SVM doesn't provide feature importance directly, we skip this for SVM
+        feature_importance$data <- NULL  # No feature importance to track for SVM
         
         output$model_message <- renderText("SVM model trained successfully!")
         
       } else if (input$model_choice == "Random Forest") {
         req(input$rf_trees)
         
+        # Ensure the target is treated as a factor for classification tasks
+        if (!is.factor(target)) {
+          target <- as.factor(target)
+        }
+        
         # Train Random Forest model
         model <- randomForest::randomForest(
           x = data,
           y = target,
-          ntree = input$rf_trees
+          ntree = input$rf_trees,
+          probability = TRUE
         )
+        
+        # Track feature importance for Random Forest
+        feature_importance$data <- randomForest::importance(model)
         
         output$model_message <- renderText("Random Forest model trained successfully!")
         
       } else if (input$model_choice == "Linear Regression") {
         
-        
         # Train Linear Regression model
         formula <- as.formula(paste("target ~ ."))
         model <- lm(formula, data = data.frame(data, target = target))
+        
+        # For Linear Regression, use coefficients as feature importance
+        feature_importance$data <- coef(model)[-1]  # Exclude the intercept
         
         output$model_message <- renderText("Linear Regression model trained successfully!")
         
       } else if (input$model_choice == "Decision Tree") {
         req(input$dt_max_depth, input$dt_criterion)
         
-        
         # Train Decision Tree model
         model <- rpart::rpart(
           formula = as.formula(paste("target ~ .")),
           data = data.frame(data, target = target),
-          method = ifelse(is.numeric(target), "anova", "class"),
+          method = ifelse(is.factor(target), "class", "anova"),  # Classification vs. Regression
           control = rpart::rpart.control(maxdepth = input$dt_max_depth),
           parms = list(split = input$dt_criterion)
         )
+        
+        # Track feature importance for Decision Tree
+        # imp <- caret::varImp(reactive_model, scale = FALSE)
+        # feature_importance$data <- imp$importance[,1]
+        feature_importance$data <- NULL 
         
         output$model_message <- renderText("Decision Tree model trained successfully!")
         
@@ -1480,8 +1508,7 @@ server <- function(input, output, session) {
         return()
       }
       
-    } 
-    else {
+    } else {
       print("no model is chosen")
     }
     
@@ -1493,6 +1520,8 @@ server <- function(input, output, session) {
       downloadButton("save_model", "Save Model")
     })
   })
+  
+  
   
   # Logic to save the trained model
   output$save_model <- downloadHandler(
@@ -1506,272 +1535,333 @@ server <- function(input, output, session) {
   
   ### Results
   
-    reactive_values <- reactiveValues(conf_matrix = NULL)
+  # Helper Function to Calculate Regression Metrics
+  calculate_regression_metrics <- function(model, test_data, test_target) {
+    predictions <- predict(model, newdata = test_data)
+    
+    # Calculate RMSE, MSE, and R²
+    rmse <- sqrt(mean((test_target - predictions)^2))
+    mse <- mean((test_target - predictions)^2)
+    r2 <- 1 - sum((test_target - predictions)^2) / sum((test_target - mean(test_target))^2)
+    
+    # Return metrics as a data frame
+    data.frame(
+      Metric = c("RMSE", "MSE", "R²"),
+      Value = c(rmse, mse, r2)
+    )
+  }
   
-  observeEvent(input$show_results, {
-    req(reactive_model, splits$test_data, splits$test_target)
-    req(splits, input$model_choice)
-    
-    # Initialize variables
-    predictions <- predict(reactive_model, newdata = splits$test_data)
-    target <- factor(splits$test_target)
-    
-    # Extract unique values in the target variable and store them in levels
-    levels <- unique(target)
-    
-    # Print the unique values (categories) of the target variable
-    print("Unique values (categories) of the target variable:")
-    print(levels)
-    
-    # Print dimensions of predictions and target to console
-    print(paste("Dimensions of predictions:", length(predictions)))
-    print(paste("Dimensions of target:", length(target)))
-    
-    # Check if predictions are NULL or empty
-    if (is.null(predictions) || length(predictions) == 0) {
-      stop("Predictions are NULL or empty!")
+  # Helper Function to Calculate Classification Metrics
+  calculate_classification_metrics <- function(model, test_data, test_target) {
+    # Ensure test_target is a factor
+    if (!is.factor(test_target)) {
+      test_target <- as.factor(test_target)
     }
     
-    # Check if the model is SVM or Random Forest (classification models)
-    if (inherits(reactive_model, "svm") || inherits(reactive_model, "randomForest")) {
-      
-      # Convert categorical target to ordinal numeric values (assumption: target is ordinal)
-      unique_categories <- unique(target)  # Extract unique categories
-      category_mapping <- setNames(1:length(unique_categories), unique_categories)  # Map categories to ordinal values
-      
-      # Convert target to numeric ordinal values for consistency
-      target_numeric <- category_mapping[as.character(target)]
-      
-      # If the predictions are continuous (e.g., probabilities), convert them to class labels
-      if (is.numeric(predictions)) {
-        predictions <- round(predictions)  # Round predictions to the nearest integer
-        
-        # Ensure predictions are within valid range
-        predictions <- pmin(pmax(predictions, 1), length(unique_categories))  # Clip predictions to valid category range
-        predictions <- factor(predictions, levels = 1:length(unique_categories))  # Convert to factor
-        predictions <- unique_categories[as.integer(predictions)]  # Map to actual category names
-      }
-      
-      # Ensure predictions are factors with the same levels as target
-      predictions <- factor(predictions, levels = levels(target))
-      
-      # Handle missing predictions correctly
-      if (any(is.na(predictions))) {
-        predictions[is.na(predictions)] <- levels(target)[1]  # Use the first level of target as default
-      }
-      
-      # Print after handling NAs
-      print("Predictions after handling NAs:")
-      print(head(predictions))  # Print first few predictions after handling NAs
-      
-      # Classification Metrics Calculation
-      confusion <- table(Predicted = predictions, Actual = target)
-      print("Confusion Matrix:")
-      print(confusion)  # Print the confusion matrix
-      
-      if (sum(confusion) > 0) {
-        # If confusion matrix is not empty, calculate metrics
-        accuracy <- sum(diag(confusion)) / sum(confusion)
-        precision <- diag(confusion) / ifelse(rowSums(confusion) == 0, 1, rowSums(confusion))
-        recall <- diag(confusion) / ifelse(colSums(confusion) == 0, 1, colSums(confusion))
-        f1 <- 2 * (precision * recall) / ifelse((precision + recall) == 0, 1, (precision + recall))
-        
-        # Collect the classification metrics
-        metrics <- data.frame(
-          Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
-          Value = c(
-            accuracy,
-            mean(precision, na.rm = TRUE),
-            mean(recall, na.rm = TRUE),
-            mean(f1, na.rm = TRUE)
-          )
-        )
-        
-        # Render classification metrics
-        output$model_metrics <- renderTable({
-          metrics
-        }, rownames = FALSE)
-        
-        # Plot ROC curve and display AUC
-        output$roc_curve <- renderPlot({
-          library(pROC)  # Ensure pROC package is available
-          
-          # Convert target to numeric for pROC compatibility
-          numeric_target <- as.numeric(target) - 1  # Convert levels to 0 and 1
-          
-          # Check if predictions are probabilities or factors
-          if (is.numeric(predictions)) {
-            prob_predictions <- predictions
-          } else {
-            prob_predictions <- as.numeric(as.character(predictions)) - 1
-          }
-          
-          # Compute ROC curve and AUC
-          roc_obj <- roc(numeric_target, prob_predictions)
-          auc_score <- auc(roc_obj)
-          
-          # Plot ROC curve
-          plot(roc_obj, col = "blue", lwd = 2, main = "ROC Curve")
-          legend("bottomright", legend = paste("AUC =", round(auc_score, 3)), bty = "n", cex = 1.2)
-        })
-        
-        # Button to display confusion matrix plot
-        output$conf_matrix_plot <- renderPlot({
-          heatmap(as.matrix(confusion), Rowv = NA, Colv = NA,
-                  col = colorRampPalette(c("white", "blue"))(100),
-                  scale = "none", margins = c(5, 5), xlab = "Actual", ylab = "Predicted")
-        })
-      } else {
-        # If confusion matrix is empty, print a message
-        output$model_metrics <- renderTable({
-          data.frame(Metric = "Error", Value = "Confusion Matrix is empty")
-        })
-      }
-      
-    } else if (inherits(reactive_model, "rpart") || inherits(reactive_model, "lm")) {
-      # Convert target to numeric if it's a factor
-      if (is.factor(target)) {
-        target <- as.numeric(as.character(target))
-      }
-      
-      # Convert predictions to numeric if they're factors (just in case)
-      if (is.factor(predictions)) {
-        predictions <- as.numeric(as.character(predictions))
-      }
-      
-      # Ensure predictions and target are not NULL or empty
-      if (is.null(predictions) || length(predictions) == 0 || is.null(target) || length(target) == 0) {
-        stop("Predictions or target are NULL or empty!")
-      }
-      
-      # Print first few predictions and target for debugging
-      print("Sample of predictions:")
-      print(head(predictions))
-      print("Sample of target:")
-      print(head(target))
-      
-      # Calculate regression metrics
-      mse <- mean((predictions - target)^2, na.rm = TRUE)
-      rmse <- sqrt(mse)
-      r_squared <- 1 - (sum((predictions - target)^2, na.rm = TRUE) / 
-                          sum((target - mean(target, na.rm = TRUE))^2, na.rm = TRUE))
-      
-      # Metrics container for regression
-      metrics <- data.frame(
-        Metric = c("MSE", "RMSE", "R-squared"),
-        Value = c(mse, rmse, r_squared)
+    # Get predictions as class labels
+    predictions <- predict(model, newdata = test_data, type = "class")
+    
+    # Debugging: Print Actual vs Predicted values
+    actual_vs_predicted <- data.frame(Actual = test_target, Predicted = predictions)
+    print("Debugging: Actual vs Predicted values")
+    print(head(actual_vs_predicted, 10))  # Show the first 10 rows
+    
+    # Calculate metrics from confusion matrix
+    confusion_matrix <- table(Predicted = predictions, Actual = test_target)
+    accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+    precision <- diag(confusion_matrix) / rowSums(confusion_matrix)
+    recall <- diag(confusion_matrix) / colSums(confusion_matrix)
+    f1_score <- 2 * (precision * recall) / (precision + recall)
+    
+    # Handle potential NA values (e.g., no predictions for certain classes)
+    precision[is.na(precision)] <- 0
+    recall[is.na(recall)] <- 0
+    f1_score[is.na(f1_score)] <- 0
+    
+    # Return metrics as a data frame
+    data.frame(
+      Metric = c("Accuracy", "Precision", "Recall", "F1 Score"),
+      Value = c(
+        accuracy, 
+        mean(precision, na.rm = TRUE), 
+        mean(recall, na.rm = TRUE), 
+        mean(f1_score, na.rm = TRUE)
       )
-      
-      # Render regression metrics
-      output$model_metrics <- renderTable({
-        metrics
-      }, rownames = FALSE)
-      
-      # Render regression metrics
-      output$conf_matrix_plot <- renderPlot({
-        plot(target, predictions, 
-             xlab = "Actual Values", 
-             ylab = "Predicted Values", 
-             main = "Prediction vs Actual Plot",
-             col = "blue", pch = 16)
-        abline(0, 1, col = "red", lwd = 2) # Add line y = x
-      })
-      
-      # Plot 2: Residuals vs. Predictions
-      output$roc_curve <- renderPlot({
-        residuals <- target - predictions
-        plot(predictions, residuals, 
-             xlab = "Predicted Values", 
-             ylab = "Residuals", 
-             main = "Residuals vs Predicted Plot",
-             col = "darkgreen", pch = 16)
-        abline(h = 0, col = "red", lwd = 2) # Add horizontal line at 0
-      })
-      
-    }
+    )
+  }
+  
+  # Reactive expression to calculate metrics
+  calculated_metrics <- reactive({
+    req(reactive_model, splits$test_data, splits$test_target)  # Ensure necessary data and model are available
     
-    output$feature_importance_plot <- renderPlot({
-      # Random Forest
-      if (inherits(reactive_model, "randomForest")) {
-        # Extract feature importance for Random Forest
-        importance_vals <- randomForest::importance(reactive_model)
-        barplot(importance_vals[, 1], 
-                names.arg = rownames(importance_vals),
-                main = "Random Forest Feature Importance",
-                col = "lightblue", 
-                las = 2, 
-                beside = TRUE,
-                cex.names = 0.8)
-        
-      } else if (inherits(reactive_model, "rpart")) {
-        # Extract feature importance for Decision Tree using caret
-        importance_vals <- tryCatch({
-          caret::varImp(reactive_model)
-        }, error = function(e) {
-          cat("Error extracting feature importance for Decision Tree: ", e$message, "\n")
-          return(NULL)
-        })
-        
-        # Check the structure of importance_vals
-        if (!is.null(importance_vals)) {
-          print("Structure of importance_vals:")
-          print(str(importance_vals))
-          
-          # Adjust based on actual structure
-          if ("Overall" %in% colnames(importance_vals$importance)) {
-            barplot(importance_vals$importance$Overall,
-                    names.arg = rownames(importance_vals$importance),
-                    main = "Decision Tree Feature Importance",
-                    col = "lightgreen",
-                    las = 2,
-                    beside = TRUE,
-                    cex.names = 0.8)
-          } else {
-            print("Error: 'Overall' column is not available in importance data.")
-          }
-        }
-        
-        
-      } else if (inherits(reactive_model, "svm")) {
-        # Ensure that the SVM model is linear
-        if (reactive_model$type == "C-classification" && reactive_model$kernel == "linear") {
-          # Extract coefficients for feature importance in a linear SVM
-          coef_vals <- abs(t(reactive_model$coefs) %*% reactive_model$SV)  # Compute the importance
-          feature_names <- colnames(splits$test_data)  # Ensure feature names align with dataset
-          
-          # Check if feature names and coefficients align
-          if (length(feature_names) == length(coef_vals)) {
-            barplot(coef_vals,
-                    names.arg = feature_names,
-                    main = "SVM Feature Importance",
-                    col = "lightcoral",
-                    las = 2,
-                    beside = TRUE,
-                    cex.names = 0.8)
-          } else {
-            print("Error: Number of features does not match the coefficients.")
-          }
-        } else {
-          print("Non-linear SVM does not have a simple feature importance plot.")
-        }
-        
-      } else if (inherits(reactive_model, "lm")) {
-        # For Linear Regression, extract coefficients for feature importance
-        coef_vals <- abs(coef(reactive_model)[-1])  # Exclude the intercept (first element)
-        feature_names <- names(coef(reactive_model))[-1]  # Exclude the intercept from feature names
-        barplot(coef_vals, 
-                names.arg = feature_names,
-                main = "Linear Regression Feature Importance",
-                col = "lightyellow", 
-                las = 2, 
-                beside = TRUE,
-                cex.names = 0.8)
-      }
-    })
+    # Fetch test data and test target
+    test_data <- splits$test_data
+    test_target <- splits$test_target
+    
+    # Determine the model type and calculate metrics
+    if (inherits(reactive_model, "lm") || (inherits(reactive_model, "rpart") && is.numeric(test_target))) {
+      # Regression Model (Linear Regression or Decision Tree with numeric target)
+      calculate_regression_metrics(reactive_model, test_data, test_target)
+    } else if (inherits(reactive_model, "randomForest") || inherits(reactive_model, "svm")) {
+      # Classification Model
+      calculate_classification_metrics(reactive_model, test_data, test_target)
+    } else {
+      # Unsupported Model Type
+      data.frame(Metric = "Error", Value = "Unsupported model type for metric calculation.")
+    }
   })
   
+  # Render metrics in the table output
+  output$model_metrics <- renderTable({
+    calculated_metrics()  # Call the reactive expression to fetch the metrics
+  })
   
+  ## Confusion Matrix & Plot (Predicted & Actual)
+
+  # Dynamic title logic
+  output$dynamic_title <- renderText({
+    req(input$model_choice)
+    
+    if (input$model_choice == "") {
+      return("")
+    } else if (input$model_choice %in% c("SVM", "Random Forest")) {
+      return("Confusion Matrix")
+    } else if (input$model_choice %in% c("Linear Regression", "Decision Tree")) {
+      return("Plot Predicted vs Actual")
+    } else {
+      return("Unknown Model Type")
+    }
+  })
   
+  # Dynamic plot rendering based on model type
+  output$conf_matrix_plot <- renderPlot({
+    req(reactive_model, splits$test_data, splits$test_target, input$model_choice)  # Ensure data and model choice are available
+    
+    # Fetch test data and test target
+    test_data <- splits$test_data
+    test_target <- splits$test_target
+    
+    # Classification Models: Render Confusion Matrix
+    if (input$model_choice %in% c("SVM", "Random Forest")) {
+      # Ensure test_target is a factor
+      if (!is.factor(test_target)) {
+        test_target <- as.factor(test_target)
+      }
+      
+      # Get predictions
+      predictions <- predict(reactive_model, newdata = test_data, type = "class")
+      
+      # Create confusion matrix
+      confusion_matrix <- table(Predicted = predictions, Actual = test_target)
+      
+      # Visualize confusion matrix
+      ggplot(data = as.data.frame(confusion_matrix), aes(x = Actual, y = Predicted)) +
+        geom_tile(aes(fill = Freq), color = "white") +
+        geom_text(aes(label = Freq), size = 5, color = "black") +
+        scale_fill_gradient(low = "white", high = "steelblue") +
+        labs(title = "Confusion Matrix", x = "Actual", y = "Predicted") +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(size = 14, face = "bold"),
+          axis.text = element_text(size = 12),
+          axis.title = element_text(size = 12)
+        )
+    } 
+    # Regression Models: Plot Actual vs Predicted
+    else if (input$model_choice %in% c("Linear Regression", "Decision Tree")) {
+      # Get predictions
+      predictions <- predict(reactive_model, newdata = test_data)
+      
+      # Create scatter plot
+      ggplot(data = data.frame(Actual = test_target, Predicted = predictions), aes(x = Actual, y = Predicted)) +
+        geom_point(color = "steelblue", alpha = 0.7) +
+        geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+        labs(title = "Actual vs Predicted", x = "Actual", y = "Predicted") +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(size = 14, face = "bold"),
+          axis.text = element_text(size = 12),
+          axis.title = element_text(size = 12)
+        ) +
+        coord_fixed()  # Ensure equal scaling
+    } else {
+      # Default: Display nothing if the model type is unsupported
+      NULL
+    }
+  }, height = 330)  # Max plot height
+  
+  ## Plot Residual & RUC Curve
+  
+  # Dynamic title logic
+  output$Roc_Residual <- renderText({
+    req(input$model_choice)
+    
+    if (input$model_choice == "") {
+      return("")
+    } else if (input$model_choice %in% c("SVM", "Random Forest")) {
+      return("AUC-RUC Curve")
+    } else if (input$model_choice %in% c("Linear Regression", "Decision Tree")) {
+      return("Plot Residual vs Predicted")
+    } else {
+      return("Unknown Model Type")
+    }
+  })
+  
+  # Render plot for ROC Curve or Residuals
+  output$roc_curve <- renderPlot({
+    req(reactive_model, splits$test_data, splits$test_target, input$model_choice)  # Ensure necessary inputs
+    
+    # Fetch test data and test target
+    test_data <- splits$test_data
+    test_target <- splits$test_target
+    
+    # Classification Models
+    if (input$model_choice %in% c("SVM", "Random Forest")) {
+      # Ensure test_target is a factor
+      if (!is.factor(test_target)) {
+        test_target <- as.factor(test_target)
+      }
+      
+      # Handle model-specific probability predictions
+      if (inherits(reactive_model, "svm")) {
+        # For SVM, use `probability = TRUE` when training the model
+        prob_predictions <- attr(predict(reactive_model, newdata = test_data, probability = TRUE), "probabilities")
+      } else if (inherits(reactive_model, "randomForest")) {
+        # For Random Forest
+        prob_predictions <- predict(reactive_model, newdata = test_data, type = "prob")
+      } else {
+        stop("Unsupported classification model type.")
+      }
+      
+      if (ncol(prob_predictions) == 2) {
+        # Binary Classification
+        roc_obj <- pROC::roc(test_target, prob_predictions[, 2])  # Use probabilities for the positive class
+        auc_score <- pROC::auc(roc_obj)
+        
+        # Plot ROC Curve with diagonal line and customized axes
+        p <- pROC::ggroc(roc_obj) +
+          ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray") +  # Baseline diagonal line
+          ggplot2::labs(
+            title = paste("ROC Curve (AUC =", round(auc_score, 2), ")"),
+            x = "FPR (1 - Specificity)",
+            y = "TPR (Sensitivity)"
+          ) +
+          ggplot2::theme_minimal() +
+          ggplot2::theme(
+            plot.title = ggplot2::element_text(size = 14, face = "bold"),
+            axis.text = ggplot2::element_text(size = 12),
+            axis.title = ggplot2::element_text(size = 12)
+          )
+        print(p)
+      } else {
+        # Multiclass Classification
+        roc_list <- lapply(seq_len(ncol(prob_predictions)), function(class_idx) {
+          pROC::roc(test_target == colnames(prob_predictions)[class_idx], prob_predictions[, class_idx])
+        })
+        
+        # Average AUC
+        auc_scores <- sapply(roc_list, pROC::auc)
+        mean_auc <- mean(auc_scores)
+        
+        # Plot first class ROC as example with diagonal line
+        p <- pROC::ggroc(roc_list[[1]]) +
+          # ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray") +  # Baseline diagonal line
+          ggplot2::labs(
+            title = paste("Multiclass ROC Curve (Mean AUC =", round(mean_auc, 2), ")"),
+            x = "FPR (1 - Specificity)",
+            y = "TPR (Sensitivity)"
+          ) +
+          ggplot2::theme_minimal() +
+          ggplot2::theme(
+            plot.title = ggplot2::element_text(size = 14, face = "bold"),
+            axis.text = ggplot2::element_text(size = 12),
+            axis.title = ggplot2::element_text(size = 12)
+          )
+        print(p)
+      }
+    } 
+    
+    # Regression Models
+    else if (input$model_choice %in% c("Linear Regression", "Decision Tree")) {
+      # Get predictions
+      predictions <- predict(reactive_model, newdata = test_data)
+      
+      # Calculate residuals
+      residuals <- test_target - predictions
+      
+      # Create scatter plot for residuals vs predicted
+      ggplot(data = data.frame(Predicted = predictions, Residuals = residuals), aes(x = Predicted, y = Residuals)) +
+        geom_point(color = "steelblue", alpha = 0.7) +
+        geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+        labs(title = "Residuals vs Predicted", x = "Predicted", y = "Residuals") +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(size = 14, face = "bold"),
+          axis.text = element_text(size = 12),
+          axis.title = element_text(size = 12)
+        )
+    } else {
+      NULL  # Unsupported model type
+    }
+  }, height = 330)  # Max plot height
+  
+  ## Features Importance
+  
+  fluidRow(
+    # Box for Feature Importance Plot
+    box(
+      title = "Feature Importance",
+      status = "success",
+      solidHeader = TRUE,
+      width = 12,
+      plotOutput("importance_plot")
+    )
+  )
+  
+  output$importance_plot <- renderPlot({
+    # Check if the model is trained
+    req(reactive_model)
+    
+    # Plot the feature importance for other models
+    if (!is.null(feature_importance$data)) {
+      if (input$model_choice == "Random Forest") {
+        # Extract feature importance from Random Forest model
+        rf_imp <- randomForest::importance(reactive_model)
+        feature_importance$data <- rf_imp[, 1]  # Get the importance values (first column)
+        
+        # Random Forest feature importance
+        barplot(feature_importance$data, 
+                main = "Random Forest Feature Importance", 
+                col = "lightblue", 
+                las = 2,            # Rotate labels to vertical
+                cex.names = 0.8,    # Adjust size of labels
+                names.arg = rownames(rf_imp),  # Set feature names from row names of importance
+                horiz = TRUE)       # Make the bars horizontal for better readability
+      } else if (input$model_choice == "Linear Regression") {
+        # Linear Regression coefficients as feature importance
+        barplot(feature_importance$data, 
+                main = "Linear Regression Feature Importance", 
+                col = "lightgreen", 
+                las = 2, 
+                cex.names = 0.8, 
+                names.arg = names(feature_importance$data), 
+                horiz = TRUE)
+      } else if (input$model_choice == "Decision Tree") {
+        # Decision Tree feature importance
+        # Using caret's varImp function for rpart model
+        # imp <- caret::varImp(reactive_model, scale = FALSE)
+        # feature_importance$data <- imp$importance[,1]
+        
+        barplot(feature_importance$data, 
+                main = "Decision Tree Feature Importance", 
+                col = "lightcoral", 
+                las = 2, 
+                cex.names = 0.8, 
+                names.arg = names(feature_importance$data), 
+                horiz = TRUE)
+      }
+    }
+  })
   
   
   
@@ -1779,9 +1869,9 @@ server <- function(input, output, session) {
   
   
   ##  housing prices 
-    # Render the study case content
-    output$study_case_content <- renderUI({
-      HTML('
+  # Render the study case content
+  output$study_case_content <- renderUI({
+    HTML('
       <h1>📚 Study Case: Housing Dataset</h1>
 
       <h2>1. Introduction</h2>
@@ -1873,5 +1963,5 @@ server <- function(input, output, session) {
 
       
     ')
-    })
+  })
 }
