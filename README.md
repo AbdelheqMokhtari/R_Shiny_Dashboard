@@ -112,6 +112,9 @@ The Results section provides a detailed evaluation of model performance:
 - **R Version**: 4.0 or higher.
 - **Additional Packages**: Ensure all required libraries are installed.
 
+## Application URL
+https://9229dp-abdelheq-mokhtari.shinyapps.io/Rshiny-DB-DataScience/
+
 ## Acknowledgments
 This project is designed for educational purposes to demonstrate the application of data preprocessing, exploratory data analysis, and machine learning workflows using R Shiny.
 
