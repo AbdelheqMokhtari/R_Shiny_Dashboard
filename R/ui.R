@@ -27,23 +27,67 @@ ui <- dashboardPage(
     tags$head(
       tags$style(HTML("
         /* Customizing the Dashboard */
-        .skin-blue .main-header .logo {
-          background-color: #1f77b4; /* Header background */
-          color: white; /* Header text color */
-          font-size: 20px; /* Header font size */
+                .main-header .navbar {
+          background-color: #8A1538 !important;
+        }
+        .main-header .logo {
+          background-color: #8A1538 !important;
+          color: white !important;
         }
         .skin-blue .main-sidebar {
           background-color: #343a40; /* Sidebar background */
           color: #f8f9fa; /* Sidebar text color */
         }
         .skin-blue .sidebar-menu>li.active>a {
-          background-color: #17a2b8; /* Active menu item background */
+          background-color: #A84058; /* Active menu item background */
           color: white;
         }
         .skin-blue .sidebar-menu>li>a:hover {
-          background-color: #007bff; /* Hovered menu item background */
+          background-color: #8A1538; /* Hovered menu item background */
           color: white;
         }
+        
+        .box {
+          border: 2px solid #343a40; /* Box border color */
+          background-color: #f7f7f7; /* Box background color */
+          border-radius: 10px; /* Rounded corners */
+        }
+        .box-header {
+           background-color: #A84058 !important; /* Box header background color */
+           color: white !important; /* Box header text color */
+          font-weight: bold;
+          border-radius: 10px 10px 0 0; /* Rounded corners for the header */
+        }
+      .btn {
+        background-color: #A84058; /* Default button background color (Blue) */
+        color: white; /* Button text color */
+        border: none; /* Remove border */
+      }
+  
+      .btn:hover {
+        background-color: #C56B79; /* Button background color on hover (Darker Blue) */
+        color: white; /* Button text color on hover */
+      }
+  
+      /* Style for action buttons specifically */
+      .btn-action {
+        background-color: #A84058; /* Green background for action buttons */
+        color: white;
+      }
+
+      .btn-action:hover {
+        background-color: #C56B79; /* Darker green on hover */
+      }
+  
+      /* Customize primary buttons */
+      .btn-primary {
+        background-color: #A84058; /* Purple background for primary buttons */
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background-color: #C56B79; /* Darker purple on hover */
+      }
       "))
     ),
     useShinyjs(),  # Enable shinyjs
@@ -56,11 +100,15 @@ ui <- dashboardPage(
             tabsetPanel(
               tabPanel(
                 title = "Housing Prices",
-                htmlOutput("study_case_content")
+                includeHTML("../www/House_Prices.html")
               ),
               tabPanel(
-                title="Diabetes Diagnosis",
-                htmlOutput("diabetes_diagnosis")
+                title = "Air Quality and Pollution Assessment",
+                includeHTML("../www/Air_Quality.html")
+              ),
+              tabPanel(
+                title = "Diabetes",
+                includeHTML("../www/Diabetes.html")
               )
             )
           )
@@ -71,15 +119,14 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "Loading Data",
-            status = "primary",
             solidHeader = TRUE,
             width = 6,
+            class = "custom-box",
             fileInput("fileInput", "Browse File", accept = c(".csv", ".xlsx")),
             helpText("Upload a CSV or Excel file.")
           ),
           box(
             title = "File Details",
-            status = "info",
             solidHeader = TRUE,
             width = 6,
             verbatimTextOutput("fileDetails")
@@ -88,7 +135,6 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "Data Exploration",
-            status = "warning",
             solidHeader = TRUE,
             width = 12,
             tabsetPanel(
@@ -108,7 +154,6 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "Drop Feature",
-            status = "danger",
             solidHeader = TRUE,
             width = 12,
             uiOutput("drop_feature_ui"),
@@ -119,7 +164,6 @@ ui <- dashboardPage(
           # Box for Numerical to Categorical Conversion
           box(
             title = "Convert Numerical to Categorical",
-            status = "primary",
             solidHeader = TRUE,
             width = 6,
             selectInput(
@@ -134,7 +178,6 @@ ui <- dashboardPage(
           # Box for Categorical to Numerical Conversion
           box(
             title = "Convert Categorical to Numerical",
-            status = "warning",
             solidHeader = TRUE,
             width = 6,
             selectInput(
@@ -153,7 +196,6 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "Handle Missing Values", 
-            status = "primary", 
             solidHeader = TRUE, 
             width = 6,
             uiOutput("missing_var_ui"),
@@ -163,7 +205,6 @@ ui <- dashboardPage(
           ),
           box(
             title = "Handle Outliers", 
-            status = "warning", 
             solidHeader = TRUE, 
             width = 6,
             uiOutput("outlier_var_ui"),
@@ -179,7 +220,6 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "Data Transformation",
-            status = "success",
             solidHeader = TRUE,
             width = 6,
             uiOutput("transform_var_ui"),
@@ -200,7 +240,6 @@ ui <- dashboardPage(
           ),
           box(
             title = "Encoding Data",
-            status = "info",
             solidHeader = TRUE,
             width = 6,
             uiOutput("encoding_var_ui"),
@@ -226,7 +265,7 @@ ui <- dashboardPage(
             div(
               style = "text-align: center; margin-top: 20px; margin-bottom: 30px;",
               actionButton("submit_data", "Submit", 
-                           style = "padding: 10px 20px; font-size: 18px; background-color: #007BFF; color: white;"),
+                           style = "padding: 10px 20px; font-size: 18px; background-color: #A84058; color: white;"),
               downloadButton("save_data", "Save", 
                              class = "btn btn-secondary shiny-disabled",
                              style = "padding: 10px 20px; font-size: 18px; margin-left: 20px;")
@@ -235,7 +274,6 @@ ui <- dashboardPage(
         ),
         fluidRow(
           box(
-            status = "warning",
             solidHeader = TRUE,
             width = 12,
             title = "Training Data",
@@ -252,12 +290,12 @@ ui <- dashboardPage(
         fluidRow(
           # Box for single variable selection
           box(
-            title = "Univariate Analysis Variable Selection", status = "primary", solidHeader = TRUE, width = 6,
+            title = "Univariate Analysis Variable Selection", solidHeader = TRUE, width = 6,
             selectInput("x_variable", "Variable:", choices = NULL)
           ),
           # Box for two-variable selection
           box(
-            title = "Bivariate Analysis Variable Selection", status = "primary", solidHeader = TRUE, width = 6,
+            title = "Bivariate Analysis Variable Selection", solidHeader = TRUE, width = 6,
             selectInput("x_variable_bi", "X Variable:", choices = NULL),
             selectInput("y_variable", "Y Variable:", choices = NULL)
           )
@@ -267,7 +305,7 @@ ui <- dashboardPage(
         fluidRow(
           # Unidimensional analysis box
           box(
-            title = "Unidimensional Analysis", status = "primary", solidHeader = TRUE, width = 6,
+            title = "Unidimensional Analysis", solidHeader = TRUE, width = 6,
             tabsetPanel(
               tabPanel(
                 "Histogramme", 
@@ -288,7 +326,7 @@ ui <- dashboardPage(
           ),
           # Bidimensional analysis box
           box(
-            title = "Bidimensional Analysis", status = "primary", solidHeader = TRUE, width = 6,
+            title = "Bidimensional Analysis", solidHeader = TRUE, width = 6,
             tabsetPanel(
               tabPanel(
                 "Correlation Plot",
@@ -325,7 +363,6 @@ ui <- dashboardPage(
           # Select Target Variable Box
           box(
             title = "Select Target Variable",
-            status = "success",
             solidHeader = TRUE,
             width = 4, 
             height = "400px", # Fix component height
@@ -337,7 +374,6 @@ ui <- dashboardPage(
           box(
             id = "target_histogram_box",
             title = textOutput("target_box_title"),  # Dynamic title
-            status = "primary",
             solidHeader = TRUE,
             width = 4,
             height = "400px", # Fix component height
@@ -348,7 +384,6 @@ ui <- dashboardPage(
           box(
             id = "resampling_box",
             title = "Handle Imbalanced Data",
-            status = "warning",
             solidHeader = TRUE,
             width = 4,
             height = "400px", # Fix component height
@@ -358,7 +393,7 @@ ui <- dashboardPage(
         
         fluidRow(
           box(
-            title = "Split Data", status = "primary", solidHeader = TRUE, width = 12,
+            title = "Split Data", solidHeader = TRUE, width = 12,
             selectInput(
               "split_method",
               "Choose a Data Split Method:",
@@ -400,7 +435,7 @@ ui <- dashboardPage(
         ),
         fluidRow(
           box(
-            title = "Model Selection", status = "primary", solidHeader = TRUE, width = 12,
+            title = "Model Selection", solidHeader = TRUE, width = 12,
             selectInput(
               "model_choice",
               "Select Model:",
@@ -411,7 +446,7 @@ ui <- dashboardPage(
         ),
         fluidRow(
           box(
-            title = "Model Parameters", status = "primary", solidHeader = TRUE, width = 12,
+            title = "Model Parameters", solidHeader = TRUE, width = 12,
             conditionalPanel(
               condition = "input.model_choice == 'SVM'",
               numericInput("svm_C", "Parameter C:", value = 0.01, min = 0.001, step = 0.001),
@@ -441,7 +476,7 @@ ui <- dashboardPage(
         ),
         fluidRow(
           box(
-            title = "Train and Save Model", status = "primary", solidHeader = TRUE, width = 12,
+            title = "Train and Save Model", solidHeader = TRUE, width = 12,
             actionButton("train_model", "Train Model", class = "btn-primary"),
             uiOutput("save_model_ui") # Cet élément sera rendu dynamiquement après l'entraînement
           ),
@@ -453,7 +488,6 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "Model Metrics",
-            status = "primary",
             solidHeader = TRUE,
             width = 4,
             height = "400px",
@@ -461,7 +495,6 @@ ui <- dashboardPage(
           ),
           box(
             title = textOutput("dynamic_title"),  # Dynamic title
-            status = "primary",
             solidHeader = TRUE,
             width = 4,
             height = "400px",
@@ -469,7 +502,6 @@ ui <- dashboardPage(
           ),
           box(
             title = textOutput("Roc_Residual"),
-            status = "primary",
             solidHeader = TRUE,
             width = 4,
             plotOutput("roc_curve"),
@@ -480,7 +512,6 @@ ui <- dashboardPage(
           # Box for Feature Importance Plot
           box(
             title = "Feature Importance",
-            status = "success",
             solidHeader = TRUE,
             width = 12,
             plotOutput("importance_plot")
@@ -492,7 +523,6 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "📊 Data Science Dashboard: Project README",
-            status = "primary",
             solidHeader = TRUE,
             width = 12,
             div(style = "overflow-y: auto; max-height: 80vh;", # Enables scrolling
@@ -785,7 +815,6 @@ ui <- dashboardPage(
 
 <h3>Acknowledgments</h3>
 <p>This project is designed for educational purposes to demonstrate the application of data preprocessing, exploratory data analysis, and machine learning workflows using R Shiny.</p>
-
 <h3>Contributors</h3>
 <ul>
   <li>Abdelheq Mokhtari </li>

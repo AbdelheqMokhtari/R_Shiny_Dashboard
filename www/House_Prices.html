@@ -1,0 +1,168 @@
+<style>
+    h1 {
+        color: #2c3e50;
+    }
+    h2 {
+        color: #34495e;
+    }
+    p {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        margin: 10px 0;
+    }
+    ul {
+        margin: 10px 0 20px 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 5px 10px; /* Adds space between rows and columns */
+      margin-bottom: 20px;
+      background-color: #fff;
+   }
+   .download-link {
+        margin: 20px 0;
+        padding: 10px 15px;
+        background-color: #3498db;
+        color: white;
+        font-size: 16px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        border-radius: 5px;
+    }
+    .download-link:hover {
+        background-color: #2c80b4;
+    }
+</style>
+<h1>📚 Study Case: Housing Dataset</h1>
+
+  <div>
+    <a href="https://drive.google.com/uc?export=download&id=1xFAgFWtIRnyzAxYMfgady6xGxKDVxGQX" class="download-link" target="_blank">⬇️ Download Dataset</a>
+  </div>
+  
+
+      <h2>1. Introduction</h2>
+      <p><strong>Objective:</strong> To analyze and model the housing dataset to predict factors like price based on various attributes such as area, number of bedrooms, and locality.</p>
+      <p><strong>Dataset Overview:</strong> The dataset contains housing details, including size, price, location, and other features that can influence housing prices.</p>
+      
+      <div style="text-align: center;">
+  <a href="https://ibb.co/q7hN25r">
+    <img src="https://i.ibb.co/HBRt9dH/dataset-housing-description.png" 
+         alt="Dataset Overview" width="600" height="200" />
+  </a>
+</div>
+
+
+
+      <h2>2. Dataset Description</h2>
+      <p><strong>Summary:</strong> The dataset includes the following features:</p>
+      <ul>
+        <li><code>area</code>: Size of the house in square feet.</li>
+        <li><code>bedrooms</code>: Number of bedrooms in the house.</li>
+        <li><code>price</code>: Price of the house.</li>
+        <li><code>bathrooms</code>: Number of bathrooms in the house.</li>
+        <li><code>stories</code>: Number of stories.</li>
+        <li><code>mainroad</code>: Whether the house is near the main road (yes/no).</li>
+        <li><code>guestroom</code>: Presence of a guest room (yes/no).</li>
+        <li><code>basement</code>: Presence of a basement (yes/no).</li>
+        <li><code>hotwaterheating</code>: Availability of hot water heating (yes/no).</li>
+        <li><code>airconditioning</code>: Presence of air conditioning (yes/no).</li>
+        <li><code>parking</code>: Number of parking spaces.</li>
+        <li><code>prefarea</code>: Whether the house is in a preferred area (yes/no).</li>
+        <li><code>furnishingstatus</code>: Furnishing status of the house (furnished/semi-furnished/unfurnished).</li>
+      </ul>
+      
+     <div style="text-align: center;">
+  <a href="https://ibb.co/Xpd7YVw">
+    <img src="https://i.ibb.co/82RrYXh/dataset-housing-summary.png" alt="Dataset summary" border="0" />
+  </a>
+</div>
+
+
+      <h2>3. Preprocessing</h2>
+      <p><strong>Steps Taken:</strong> Applied the following preprocessing steps:</p>
+      <ul>
+        <li>the dataset does not contain any missing values, no need to handle them.</li>
+        <li>Converted all categorical variables like <code>mainroad</code> and <code>guestroom</code> to numerical using label encoding.</li>
+        <li>Normalized numerical features such as <code>bedrooms</code>,<code>bathrooms</code>,<code>stories</code> and <code>parking</code>  using Min-Max scaling.</li>
+      </ul>
+      <p><strong>Rationale:</strong> Preprocessing ensures data consistency, handles missing values, and prepares the data for machine learning models.</p>
+
+      <h2>4. Analysis</h2>
+      <h3>Univariate Analysis</h3>
+      <p>Generated histograms for numerical features like <code>price</code> and <code>area</code>, and pie charts for categorical variables like <code>furnishingstatus</code>.</p>
+      <h3>Bivariate Analysis</h3>
+      <p>Scatter plots reveal strong positive correlations between <code>area</code> and <code>price</code>. Bar plots highlight the impact of preferred area on pricing.</p>
+      
+        <div style="display: flex; justify-content: space-between;">
+      <a href="https://ibb.co/kH7cq71"><img src="https://i.ibb.co/X2QJFQ8/dataset-housing-histogram.png" alt="histogram of the target variable" width="80%" border="0" style="margin-right: 10px;"></a> 
+      <a href="https://ibb.co/tPM0GRC"><img src="https://i.ibb.co/2Y7z9JK/dataset-housing-correlation.png" alt="dataset-housing-correlation" border="0" width="80%"/></a> 
+    </div>
+
+      <h2>5. Modeling</h2>
+      <p><strong>Target Variable:</strong> <code>price</code>, a continuous variable.</p>
+      <p><strong>Selected Models:</strong> Linear Regression and Decision Tree were chosen to predict housing prices.</p>
+      <p><strong>Evaluation Metrics:</strong> Metrics include Mean Squared Error (MSE), Root Mean Squared Error (RMSE), and R-squared.</p>
+      <p><strong>Data splitting: </strong>we have taken 70% of the data as training and 30% as testing</p>
+      <h2>6. Results</h2>
+      <p><strong>Metrics:</strong> Model performance metrics are as follows:</p>
+      <style>
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0; /* Adds spacing around the table */
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 15px; /* Adds padding inside each cell */
+    text-align: center;
+  }
+  th {
+    background-color: #f4f4f4; /* Light gray background for headers */
+  }
+  tr:nth-child(even) {
+    background-color: #f9f9f9; /* Alternating row colors for better readability */
+  }
+</style>
+
+<table>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th>Linear Regression</th>
+      <th>Decision Tree</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>MSE</td>
+      <td>1,433,143,816,350.62</td>
+      <td>1,839,843,662,869.32</td>
+    </tr>
+    <tr>
+      <td>RMSE</td>
+      <td>1,197,139.85</td>
+      <td>1,356,408.37</td>
+    </tr>
+    <tr>
+      <td>R-squared</td>
+      <td>0.64</td>
+      <td>0.54</td>
+    </tr>
+  </tbody>
+</table>
+
+      <div style="display: flex; justify-content: space-between;">
+      <a href="https://imgbb.com/"><img src="https://i.ibb.co/gvtchBF/dataset-housing-metrics.png" alt="Metrics" border="0"  width="80%" style="margin-right: 10px;" /></a>
+      <a href="https://imgbb.com/"><img src="https://i.ibb.co/k2x84hT/dataset-housing-actual-vs-predicted.png" alt="Actuals vs Predictions" border="0"  width="80%" style="margin-right: 10px;"/></a>
+      <a href="https://imgbb.com/"><img src="https://i.ibb.co/6D8mWSJ/dataset-housing-predicted-vs-residuals.png" alt="Residuals vs Predictions" border="0" width="80%" /></a>
+    </div>
+      <p><strong>Visualizations:</strong> Feature importance plots from Linear Regression reveal <code>area</code> and <code>bathrooms</code> as the top predictors.</p>
+     
+    <div style="text-align: center;">
+  <a href="https://ibb.co/hdDt6KF">
+    <img src="https://i.ibb.co/vdZKFJ4/dataset-housing-feauture-importance.png" 
+         alt="Feature Importance" border="0" width="400" height="200" />
+  </a>
+</div>

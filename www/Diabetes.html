@@ -1,0 +1,181 @@
+<style>
+    h1 {
+        color: #2c3e50;
+    }
+    h2 {
+        color: #34495e;
+    }
+    p {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        margin: 10px 0;
+    }
+    ul {
+        margin: 10px 0 20px 20px;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0; /* Adds spacing around the table */
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 15px; /* Adds padding inside each cell */
+        text-align: center;
+    }
+    th {
+        background-color: #f4f4f4; /* Light gray background for headers */
+    }
+    tr:nth-child(even) {
+        background-color: #f9f9f9; /* Alternating row colors for better readability */
+    }
+   .download-link {
+        margin: 20px 0;
+        padding: 10px 15px;
+        background-color: #3498db;
+        color: white;
+        font-size: 16px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        border-radius: 5px;
+    }
+    .download-link:hover {
+        background-color: #2c80b4;
+    }
+</style>
+<h1>📚 Study Case: Diabetes Diagnosis Dataset</h1>
+
+  <div>
+    <a href="https://drive.google.com/uc?export=download&id=12B7BYkkYp5DVpIKPkAflbp12_wk-8IOF" class="download-link" target="_blank">⬇️ Download Dataset</a>
+  </div>
+
+
+
+  <h2>1. Introduction</h2>
+  <p><strong>Objective:</strong> To analyze and model the diabetes diagnosis dataset to predict whether a person has diabetes based on clinical and personal attributes.</p>
+  <p><strong>Dataset Overview:</strong> The dataset contains information about patients, including age, gender, BMI, blood pressure, glucose levels, and whether they were diagnosed with diabetes.</p>
+     <div style="text-align: center;">
+    <a href="https://ibb.co/m0nH0Hv"><img src="https://i.ibb.co/ZSQhShH/data-overview.png" alt="Datset Overview" width="700" height="200" border="0" /></a>
+    </div>
+
+  <h2>2. Dataset Description</h2>
+  <p><strong>Summary:</strong> The dataset includes the following features:</p>
+  <ul>
+    <li><code>patientId</code>: Unique identifier for each patient.</li>
+    <li><code>age</code>: Age of the patient (numerical).</li>
+    <li><code>gender</code>: Gender of the patient (0 = female, 1 = male).</li>
+    <li><code>BMI</code>: Body Mass Index (numerical).</li>
+    <li><code>blood_pressure</code>: Blood pressure levels (numerical).</li>
+    <li><code>insuline</code>: Insulin levels (numerical).</li>
+    <li><code>glucose</code>: Glucose levels (numerical).</li>
+    <li><code>diabetesPedigreeFunction</code>: Genetic predisposition to diabetes (numerical).</li>
+    <li><code>outcome</code>: Target variable (0 = no diabetes, 1 = diabetes).</li>
+  </ul>
+  <p><strong>Exploratory Insights:</strong> Initial exploration reveals a strong correlation between high glucose levels, BMI, and the likelihood of diabetes. Patients with higher diabetes pedigree function values also show a higher chance of being diagnosed.</p>
+   
+   
+  <div style="text-align: center;">
+    <a href="https://ibb.co/1rwPf5S"><img src="https://i.ibb.co/Lx2czWG/data-summary.png" alt="Datset Summary" width="700" height="200" border="0" /></a>
+    </div>
+   
+   
+  <h2>3. Preprocessing</h2>
+  <p><strong>Steps Taken:</strong> Applied the following preprocessing steps:</p>
+  <ul>
+   <li> Dropping the feauture PatientID because it only represents the ID of the patient which is not pertinent feauture to train.</li>
+    <li>In this dataset does not contain any missing values </li>
+    <li>The feauture gender and outcome are already encoded.</li>
+    <li>Normalized numerical features like <code>BMI</code>, <code>glucose</code>, and <code>insuline</code> using log transformation.</li>
+  </ul>
+  <p><strong>Rationale:</strong> Preprocessing ensures the dataset is clean and ready for modeling, with consistent formats for numerical and categorical variables.</p>
+
+  <h2>4. Analysis</h2>
+  <h3>Univariate Analysis</h3>
+  <p>Generated histograms for numerical features like <code>glucose</code>, <code>BMI</code>, and <code>age</code>, and bar plots for categorical variables like <code>gender</code>.</p>
+ <h3>Bivariate Analysis</h3>
+<p>The correlation matrix reveals key relationships among the numerical features in the dataset:</p>
+<ul>
+<li><code>glucose</code> and <code>outcome</code> show a strong positive correlation, indicating that higher glucose levels are strongly associated with diabetes diagnosis.</li>
+<li><code>BMI</code> and <code>Insulin</code> also has a moderate positive correlation with <code>outcome</code>, suggesting that higher BMI and Insulin increases the likelihood of diabetes.</li>
+<li>Features like <code>gender</code> and <code>blood_pressure</code> exhibit weaker correlations with <code>outcome</code>, but they still provide some predictive value.</li>
+</ul>
+<p>A heatmap of the correlation matrix highlights these relationships, with darker shades indicating stronger correlations. This analysis helps identify the most influential predictors for the diabetes diagnosis model.</p>
+
+
+<div style="display: flex; justify-content: space-between;">
+  <a href="https://ibb.co/WPvFGmy"><img src="https://i.ibb.co/qWY97Ts/outcome-histogram.png" alt="histogram of the target variable" width="80%" border="0" style="margin-right: 10px;"></a> 
+  <a href="https://ibb.co/1s5SfL8"><img src="https://i.ibb.co/5Yy7W6B/corr-matrix.png" alt="Correlation Matrix" border="0" width="80%"/></a> 
+</div>
+
+
+  <h2>5. Modeling</h2>
+  <p><strong>Target Variable:</strong> <code>outcome</code>, a binary categorical variable indicating the presence or absence of diabetes.</p>
+  <p><strong>Selected Models:</strong> svm and Random Forest were chosen for classification.</p>
+  <p><strong>Evaluation Metrics:</strong> Metrics include accuracy, precision, recall,specitivity and F1 score, and the area under the ROC curve (AUC).</p>
+
+  <h2>6. Results</h2>
+  <p><strong>Metrics:</strong> Model performance metrics are as follows:</p>
+
+
+<table>
+<thead>
+<tr>
+  <th>Metric</th>
+  <th>SVM</th>
+  <th>Random Forest</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Accuracy</td>
+  <td>48%</td>
+  <td>48%</td>
+</tr>
+<tr>
+  <td>Precision</td>
+  <td>50%</td>
+  <td>50%</td>
+</tr>
+<tr>
+  <td>Recall</td>
+  <td>50%</td>
+  <td>50%</td>
+</tr>
+<tr>
+  <td>F1 Score</td>
+  <td>48%</td>
+  <td>48%</td>
+</tr>
+<tr>
+  <td>AUC</td>
+  <td>0.46</td>
+  <td>0.51</td>
+</tr>
+<tr>
+  <td>Specificity</td>
+  <td>50%</td>
+  <td>50%</td>
+</tr>
+</tbody>
+</table>
+
+<div style="display: flex; justify-content: space-between;">
+   <a href="https://imgbb.com/"><img src="https://i.ibb.co/Wyw33vc/metrics.png" alt="Metrics" border="0" width="80%" style="margin-right: 10px;"/></a>   
+  <a href="https://imgbb.com/"><img src="https://i.ibb.co/xhHVjQB/confusion-matrix.png" alt="confusion-matrix" border="0" width="80%" style="margin-right: 10px;" /></a>
+   <a href="https://imgbb.com/"><img src="https://i.ibb.co/qdj8fnn/roc-curve.png" alt="Roc curve" border="0" width="80%" /></a>
+</div> 
+
+
+
+
+  <p><strong>Visualizations:</strong> The ROC curve indicates better performance for Random Forest with an AUC of 0.51 compared to SVM.</p>
+
+  <h2>7. Insights</h2>
+  <p><strong>Key Observations:</strong> High glucose levels and BMI significantly contribute to diabetes diagnosis. Gender does not show a substantial impact on the outcome.</p>
+  <p><strong>Limitations:</strong> The dataset does not include lifestyle factors like diet or physical activity, which could improve model predictions.</p>
+   
+   
+   <div style="text-align: center;">
+   <a href="https://ibb.co/CvqfNrj"><img src="https://i.ibb.co/gwGxHn0/feauture-importance.png" alt="Feauture Importance" border="0" width="800" height="300" /></a>
+  </div>
